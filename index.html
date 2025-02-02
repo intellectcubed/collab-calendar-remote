@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Calendar Manager</title>
+    <style>
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            margin: 10px 0;
+        }
+        button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        label {
+            font-weight: bold;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Collaborative Calendar Manager</h1>
+    
+    <label for="calendar_grid_input_textarea">Input Calendar Grid</label>
+    <textarea id="calendar_grid_input_textarea" 
+              placeholder="Enter calendar grid here..."></textarea>
+
+    <button id="parse" onclick="parse_input()">Parse</button>
+
+    <label for="transformed_csv_textarea">New Grid</label>
+    <textarea id="transformed_csv_textarea" 
+              placeholder="Transformed CSV will appear here..."></textarea>
+
+    <button id="copy" onclick="copyToClipboard()">Copy</button>
+
+    <script>
+        function parse_input() {
+            const inputText = document.getElementById('calendar_grid_input_textarea').value;
+            const outputTextarea = document.getElementById('transformed_csv_textarea');
+            
+            // For now, just copying the input to output
+            outputTextarea.value = inputText;
+            // You can add your parsing logic here
+        }
+
+        function copyToClipboard() {
+            const outputTextarea = document.getElementById('transformed_csv_textarea');
+            outputTextarea.select();
+            document.execCommand('copy');
+            alert('Copied to clipboard!');
+        }
+    </script>
+</body>
+</html>
