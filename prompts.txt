@@ -1,0 +1,8 @@
+
+
+html create a panel that has: 
+- dropdown called shift start - contains the values 0600 - 0600 (these are times in military time from 6am to 6am, show increments of 30 min
+- dropdown called shiftend - same values as above
+- dropdown called squads (with values: 34,35,42,43,54)
+- buttons: add shift, remove shift, obliterate 
+- checkbox: 

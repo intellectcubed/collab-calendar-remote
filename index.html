@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Collaborative Calendar Manager</title>
-    <script src="js/collab.js"></script>
+    <script src="js/index.js"></script>
+    <link rel="stylesheet" type="text/css" href="css/tables.css">
+    <link rel="stylesheet" type="text/css" href="css/form.css">
     <style>
         textarea {
             width: 100%;
@@ -28,14 +30,120 @@
 
     <textarea id="transformed_csv_textarea" style="display: none;">Hidden content</textarea>
 
+
+        <div class="panel">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="shiftStart">Shift Start:</label>
+                    <select id="shiftStart">
+                        <script>
+                            // Generate time options from 0600 to 0600 next day
+                            let select = document.getElementById('shiftStart');
+                            let hour = 6;
+                            let minute = 0;
+                            let isNextDay = false;
+                            select.add(new Option('Select', ''));
     
+                            while (!(hour === 6 && minute === 0 && isNextDay)) {
+                                let hourStr = hour.toString().padStart(2, '0');
+                                let minuteStr = minute.toString().padStart(2, '0');
+                                let timeStr = hourStr + minuteStr;
+                                let displayTime = `${hourStr}${minuteStr}`;
+                                
+                                let option = new Option(displayTime, timeStr);
+                                select.add(option);
+    
+                                minute += 30;
+                                if (minute === 60) {
+                                    minute = 0;
+                                    hour++;
+                                    if (hour === 24) {
+                                        hour = 0;
+                                        isNextDay = true;
+                                    }
+                                }
+                            }
+                        </script>
+                    </select>
+                </div>
+    
+                <div class="form-group">
+                    <label for="shiftEnd">Shift End:</label>
+                    <select id="shiftEnd">
+                        <script>
+                            let shiftEnd = document.getElementById('shiftEnd');
+                            let options = document.getElementById('shiftStart').innerHTML;
+                            shiftEnd.innerHTML = options;
+                        </script>
+                    </select>
+                </div>
+    
+                <div class="form-group">
+                    <label for="squads">Squads:</label>
+                    <select id="squads">
+                        <option value="">Select squad</option>
+                        <option value="34">34</option>
+                        <option value="35">35</option>
+                        <option value="42">42</option>
+                        <option value="43">43</option>
+                        <option value="54">54</option>
+                    </select>
+                </div>
+    
+                <div class="form-group">
+                    <label for="quickTimes">Quick Times:</label>
+                    <select id="quickTimes">
+                        <option value="">Select</option>
+                        <option value="0600-1200">0600 - 1200</option>
+                        <option value="1200-0600">1200 - 0600</option>
+                        <option value="0600-1800">0600 - 1800</option>
+                        <option value="1800-0000">1800 - 0000</option>
+                        <option value="0000-0600">0000 - 0600</option>
+                        <option value="1800-0600">1800 - 0600</option>
+                    </select>
+                </div>
+    
+                <div class="form-group">
+                    <label for="currentShifts">Current Shifts:</label>
+                    <select id="currentShifts">
+                        <option value="">Select</option>
+                        <option value="0600-1200">0600 - 1200</option>
+                        <option value="1200-0600">1200 - 0600</option>
+                        <option value="0600-1800">0600 - 1800</option>
+                        <option value="1800-0000">1800 - 0000</option>
+                        <option value="0000-0600">0000 - 0600</option>
+                        <option value="1800-0600">1800 - 0600</option>
+                    </select>
+                </div>
+            </div>
+    
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" id="confirmCheckbox">
+                    I confirm these changes
+                </label>
+            </div>
+    
+            <div class="button-group">
+                <button class="add-btn">Add Shift</button>
+                <button class="remove-btn">Remove Shift</button>
+                <button class="obliterate-btn">Obliterate</button>
+            </div>
+        </div>
+    
+
+
+
+    <button id="copy" onclick="copyTest1ToClipboard('test1')">Test1</button>    
     <button id="parse" onclick="parse_input()">Parse</button>
 
     <label for="previewTable">Original</label>
-    <table id="previewTable"><thead><tr><th>Timeslot</th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
+    <table id="previewTable" class="styled-table"><thead><tr><th>Timeslot</th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
 
     <label for="modifiedTable">Modified</label>
-    <table id="modifiedTable"><thead><tr><th>Timeslot</th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
+    <button class="add-btn">Revert</button>
+
+    <table id="modifiedTable" class="styled-table"><thead><tr><th>Timeslot</th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
 
     <button id="copy" onclick="copyToClipboard()">Copy</button>
 
@@ -43,39 +151,37 @@
 
         function parse_input() {
             const outputTextarea = document.getElementById('transformed_csv_textarea');
-
             getClipboardText().then(inputText => {
                 console.log(`Got input text: ${inputText}`);
                 slots = parseSchedulePastedInput(inputText);
-                populate_orig_table(slots);
-                populate_modified_table(slots);
+                console.log(JSON.stringify(slots));
+                populate_shift_table('previewTable', slots);
+                populate_shift_table('modifiedTable', slots);
                 outputTextarea.value = slotsToSS(slots);
             });
         }
 
-        function populate_orig_table(slots) {
-            const table = document.getElementById('previewTable');
+        function populate_shift_table(tableName, slots) {
+            const table = document.getElementById(tableName);
             const tbody = table.getElementsByTagName('tbody')[0];
             tbody.innerHTML = '';
 
             slots.forEach(slot => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${slot.getStartTime()} - ${slot.getEndTime()}</td><td>${slot.getSquads()[0]}</td><td>${slot.getSquads()[1]}</td><td>${slot.getSquads()[2]}</td>`;
+                tableHtml = `<td>${padToFour(slot.startTime)} - ${padToFour(slot.endTime)}</td>`;
+                const iterator = slot.squadIterator;
+                let next = iterator.next();
+                while (!next.done) {
+                    console.log(next.value);
+                    tableHtml += `<td>${next.value.call_id}(${next.value.number_of_trucks})<br/>[${next.value.territoriesCovered}]</td>`;
+                    next = iterator.next();
+
+                }
+                tr.innerHTML = tableHtml;
                 tbody.appendChild(tr);
             });
         }
 
-        function populate_modified_table(slots) {
-            const table = document.getElementById('modifiedTable');
-            const tbody = table.getElementsByTagName('tbody')[0];
-            tbody.innerHTML = '';
-
-            slots.forEach(slot => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${slot.getStartTime()} - ${slot.getEndTime()}</td><td>${slot.getSquads()[0]}</td><td>${slot.getSquads()[1]}</td><td>${slot.getSquads()[2]}</td>`;
-                tbody.appendChild(tr);
-            });
-        }
 
         async function getClipboardText() {
             try {
@@ -97,6 +203,30 @@
                 
                 // Copy to clipboard
                 navigator.clipboard.writeText(textarea.value)
+                    .then(() => {
+                        console.log('Text copied successfully');
+                        // Optional: provide user feedback
+                        alert('Copied to clipboard!');
+                    })
+                    .catch(err => {
+                        console.error('Failed to copy text:', err);
+                    });
+                    
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        }
+
+        function copyTest1ToClipboard(testcase) {
+            let test_input = '';
+            if (testcase == 'test1') {
+                test_input = schedule_input;
+            }
+            try {
+                // Get the textarea element
+                
+                // Copy to clipboard
+                navigator.clipboard.writeText(test_input)
                     .then(() => {
                         console.log('Text copied successfully');
                         // Optional: provide user feedback
