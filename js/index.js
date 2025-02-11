@@ -16,6 +16,15 @@ class Squad {
         );
     }
 
+    static fromJson(json) {
+        return new Squad(
+            json.call_id,
+            json.territories_covered,
+            json.number_of_trucks,
+            json.is_first_responder
+        );
+    }
+
     // Optional: Add getters and setters
     get callId() {
         return this.call_id;
@@ -36,15 +45,39 @@ class Squad {
     toString() {
         return `${this.call_id} (trk=${this.number_of_trucks}) covering [${this.territories_covered}]`;
     }
+
+    asJsonString() {
+        return {
+            call_id: this.call_id,
+            territories_covered: this.territories_covered,
+            number_of_trucks: this.number_of_trucks,
+            is_first_responder: this.is_first_responder
+        };
+    }
 }
-
-
 
 class ShiftSlot {
     constructor(startTime, endTime, tango) {
         this._startTime = startTime;
         this._endTime = endTime;
         this._tango = tango;
+    }
+
+    modifySquadTerritories(squadTerritoryMap) {
+        if (squadTerritoryMap === undefined) {
+            throw new Error('Invalid squadTerritoryMap provided.  Exiting.');
+        }
+        this._squads.forEach(squad => {
+            if (squad.number_of_trucks === 0) {
+                squad.territories_covered = ['No Crew'];
+            } else {
+                if (!squadTerritoryMap.has(String(squad.call_id))) {
+                    console.log(`Error: Squad ${squad.call_id} not found in territory map.  Exiting.`);
+                    throw new Error(`Squad ${squad.call_id} not found in territory map.  Exiting.`);
+                }
+                squad.territories_covered = squadTerritoryMap.get(String(squad.call_id));
+            }
+        });
     }
 
     // Getters
@@ -71,6 +104,16 @@ class ShiftSlot {
 
     set tango(tango) {
         this._tango = tango;
+    }
+
+    get numberOfTrucks() {
+        let total = 0;
+        this._squads?.forEach(squad => total += squad.number_of_trucks);
+        return total;
+    }
+
+    get numberOfSquads() {
+        return this._squads?.size || 0;
     }
 
     get squads() {
@@ -131,6 +174,23 @@ class ShiftSlot {
         return asString;
     }
 
+    asJsonString() {
+        let squads = [];
+        const iter = this.squadIterator;
+        let next = iter.next();
+        while (!next.done) {
+            squads.push(next.value.asJsonString());
+            next = iter.next();
+        }
+
+        return JSON.stringify({
+            startTime: this.startTime,
+            endTime: this.endTime,
+            tango: this.tango,
+            squads: squads
+        });
+    }
+
 
     addSquad(squad) {
         // Add the squad to a map, or just increment the number of trucks
@@ -174,7 +234,7 @@ class ShiftSlot {
             return areMapsEqual(slot1.squads, slot2.squads) &&
                 slot1.tango === slot2.tango && slot1.number_of_trucks === slot2.number_of_trucks;
         } else {
-            console.log(`Slots are not combinable (bad time): Slot1: ${slot1.startTime} - ${slot1.endTime} Slot2: ${slot2.startTime} - ${slot2.endTime} Result: ${(slot1.endTime == slot2.startTime || slot2.endTime == slot1.startTime)}`);
+            // console.log(`Slots are not combinable (bad time): Slot1: ${slot1.startTime} - ${slot1.endTime} Slot2: ${slot2.startTime} - ${slot2.endTime} Result: ${(slot1.endTime == slot2.startTime || slot2.endTime == slot1.startTime)}`);
             return false;
         }
     }
@@ -185,6 +245,68 @@ class ShiftSlot {
             instance.squads.forEach(sqd => slot.addSquad(Squad.fromInstance(sqd)));
         }
         return slot;
+    }
+
+    static fromJson(json) {
+        // First create the ShiftSlot with basic properties
+        const slot = new ShiftSlot(
+            json.startTime,
+            json.endTime,
+            json.tango
+        );
+    
+        // If squads exist in the JSON, add them
+        if (json.squads && Array.isArray(json.squads)) {
+            json.squads.forEach(squadJson => {
+                const squad = Squad.fromJson(squadJson);
+                slot.addSquad(squad);
+            });
+        }
+    
+        return slot;
+    }        
+}
+
+class ShiftSlotCollection {
+
+    addShiftSlot(shiftSlot) {
+        if (this._theCollection === undefined) {
+            this._theCollection = [];
+        }
+        this._theCollection.push(ShiftSlot.fromInstance(shiftSlot));
+    }
+
+    get shiftSlots() {
+        const cloned = [];
+
+        for (let i = 0; i < this._theCollection?.length ?? 0; i++) {
+            cloned.push(ShiftSlot.fromInstance(this._theCollection[i]));
+        }
+
+        return cloned;
+    }
+
+    get size() {
+        return this._theCollection?.length || 0;
+    }
+
+    static fromJsonString(jsonString) {
+
+        const shiftSlotCollection = new ShiftSlotCollection();
+        const json = JSON.parse(jsonString);
+
+        for (let i = 0; i < json.length; i++) {
+            shiftSlotCollection.addShiftSlot(ShiftSlot.fromJson(JSON.parse(json[i])));
+        }
+        return shiftSlotCollection;
+    }
+
+    asJsonString() {
+        const shifts = [];
+        for (let i = 0; i < this._theCollection.length; i++) {
+            shifts.push(this._theCollection[i].asJsonString());
+        }
+        return JSON.stringify(shifts);
     }
 }
 
@@ -375,10 +497,6 @@ function addMinutes(time) {
     return (hours * 100) + minutes;
 }
 
-// Test the function
-// const intervals = generateTimeIntervals();
-// intervals.forEach(interval => console.log(interval));
-
 function initializeScheduleMatrix(intervals) {
     /**
      * Given a list of intervals (intervals is a string[] eg: 0600, 0630, 0700...)
@@ -408,7 +526,7 @@ function slotsToMatrix(slots) {
     return matrix;
 }
 
-function matrixToSlots(matrix) {
+function matrixToSlots(matrix, territories) {
     let slots = [];
 
     for (let i = 0; i < matrix.length; i++) {
@@ -424,7 +542,103 @@ function matrixToSlots(matrix) {
         }
         // console.log(`Slot: ${slot.startTime} - ${slot.endTime}`);
     }
+    populateTerritories(slots, territories);
+    populateTango(slots);
     return slots;
+}
+
+function _makeKeyForSlot(slot) {
+    let key = '';
+    slot.squads.forEach(squad => {
+        if (key !== '') {
+            key += ',';
+        }
+        key += squad.call_id;
+    });
+
+    return key.split(',').sort().join(',');
+}
+
+/**
+ * 
+ * @param {ShiftSlot} slot 
+ * @returns nada
+ * This method takes a slot (which has squads in it) and creates a key for look up in the territory map.
+ * The key is a string consisting of the concatination of the sorted list of squad ids seperated by commas.  For 
+ * example, if the ShiftSlot contains squads 34, 35, and 42, the key would be '34,35,42'.  This key is used to look up
+ * the territories covered by the squads in the territory map.
+ * 
+ * Note that if a squad is in the list, but it has no trucks, it is not included in the key.
+ */
+function makeKeyForSlot(slot) {
+    let key = '';
+    slot.squads.forEach(squad => {
+        if (squad.numberOfTrucks > 0) {
+            if (key !== '') {
+                key += ',';
+            }
+            key += squad.call_id;
+        }
+    });
+
+    return key.split(',').sort().join(',');
+}
+
+/**
+ * 
+ * @param {ShiftSlot[]} slots 
+ * @param {Map(Map())} territories 
+ */
+function populateTerritories(slots, territories) {
+    slots.forEach(slot => {
+        // Don't get your panties in a bunch over two loops here. It's not that bad.  There can be only 3 squads per slot.
+        let key = makeKeyForSlot(slot);
+        if (!territories.has(key)) {
+            console.log(`Error: Key ${key} not found in territories.  Exiting.`);
+            throw new Error(`Key ${key} not found in territories.  Exiting.`);
+        }
+        // Populate the squads with no crew since they won't be populated in slot.modifySquadTerritories()
+        slot.squads.forEach(squad => {
+            if (squad.numberOfTrucks === 0) {
+                squad.territories_covered = ['No Crew'];
+            }
+        });
+        slot.modifySquadTerritories(territories.get(key));
+    });
+}
+
+
+function _populateTerritories(slots, territories) {
+    slots.forEach(slot => {
+        if (slot.numberOfSquads === 1) {
+            slot.modifySquadTerritories(new Map([[String(slot.squads.keys().next().value),'All']]));
+        } else {
+            // Don't get your panties in a bunch over two loops here. It's not that bad.  There can be only 3 squads per slot.
+            let key = makeKeyForSlot(slot);
+            if (!territories.has(key)) {
+                console.log(`Error: Key ${key} not found in territories.  Exiting.`);
+                throw new Error(`Key ${key} not found in territories.  Exiting.`);
+            }
+            slot.modifySquadTerritories(territories.get(key));
+        }
+    });
+}
+
+/**
+ * 
+ * @param {ShiftSlot[]} slots 
+ * 
+ * If tango is populated, and the squad exists, use the tango.  Otherwise, use the first squad in the (sorted) list.
+ */
+function populateTango(slots) {
+    slots.forEach(slot => {
+        const defaultTango = slot.squads.size > 0 ? 
+            Array.from(slot.squads.keys()).sort()[0] : '';
+        
+        if (!slot.tango || slot.tango === '' || !slot.squads.has(slot.tango)) {
+            slot.tango = defaultTango;
+        }
+    });
 }
 
 /**
@@ -433,7 +647,6 @@ function matrixToSlots(matrix) {
  * @param {ShiftSlot} shift 
  */
 function addShift(matrix, shift) {
-    // console.log(`Adding shift with time interval: ${shift.startTime} - ${shift.endTime}`);
     // Create a list of start times in the matrix that corresponds to the start time - end time of the shift
     const slot_intervals = generateTimeIntervals(shift.startTime, shift.endTime);
     const intervalStartIndex = matrix.findIndex(matrixRow => padToFour(matrixRow.startTime) === slot_intervals[0]);
@@ -463,8 +676,7 @@ function removeShift(matrix, shift, obliterate=false) {
         console.log('Warning: Shift has more than one squad.  This function is not designed to handle this case.');
         throw new Error('Shift has more than one squad.  This function is not designed to handle this case.');
     }
-    // TODO: Do something about tango!
-    console.log('Reminder: Do something about tango!');
+
     const slot_intervals = generateTimeIntervals(shift.startTime, shift.endTime);
     const intervalStartIndex = matrix.findIndex(matrixRow => padToFour(matrixRow.startTime) === slot_intervals[0]);
 
@@ -477,46 +689,10 @@ function removeShift(matrix, shift, obliterate=false) {
     }
 }
 
-function areArraysEqualIgnoreFirst(arr1, arr2) {
-    return JSON.stringify(arr1.slice(1)) === JSON.stringify(arr2.slice(1));
-}
-
-/**
- * Given an Interval Matrix, return ShiftSlot[]
- * @param {} matrix 
- */
-function matrix_to_slots(matrix) {
-    let prev_row = undefined;
-    let series_start = undefined;
-    
-    let slots = [];
-    for (let i = 0; i < matrix.length; i++) {
-        const row = matrix[i];
-
-        if (prev_row === undefined) {
-            series_start = row[0];
-        } else if (!areArraysEqualIgnoreFirst(row, prev_row)) {
-            slots.push(new ShiftSlot(series_start, row[0], prev_row[1], prev_row.getSquads()));
-            series_start = row[0];            
-        } 
-        prev_row = row;
-    }
-
-    if (prev_row !== undefined) {
-        slots.push(new ShiftSlot(series_start, row[0], prev_row.getTango(), prev_row.getSquads()));
-    }
-    
-    return slots;
-}
-
 function showShifts(slots) {
     for (let i = 0; i < slots.length; i++) {
-        console.log(slots[i]);
+        console.log(slots[i].toString());
     }
-}
-
-function squadToPrettyString(squad) {
-    return `${squad.callId} (trk=${squad.number_of_trucks}) covering [${squad.territoriesCovered}]`;
 }
 
 function showMatrix(matrix) {
@@ -533,23 +709,103 @@ function showMatrix(matrix) {
         squads_on_row_map = matrixRow.squads;
         [...squads_on_row_map.keys()]
             .sort()
-            .map(key => formatted_string += '\t' + squadToPrettyString(squads_on_row_map.get(key)));
+            .map(key => formatted_string += '\t' + squads_on_row_map.get(key).toString());
 
         console.log(formatted_string)
     }
 }
 
+/**
+ * 
+ * @param {pathToTerritories file} tsvFile 
+ * @returns 
+ */
+function createTerritoryMap(tsvFile) {
+    /**
+     * Read the TSV file and create a Map of Maps
+     * Outer map key is the territory key (eg: '34,35,54'), value is an inner map
+     * inner map key is the squad key (eg: '42'), value is territories covered (eg: [34,35])
+     */
+    return fetch(tsvFile)
+        .then(response => response.text())
+        .then(data => {
+            return buildTeamMap(data);
+        })
+        .catch(error => {
+            console.error('Error reading TSV file:', error);
+            throw error;
+        });
+}
+const ALL_SQUADS = [34,35,42,43,54];
+function buildTeamMap(data) {
+    // Create the outer Map
+    const teamMap = new Map();
+    
+    // Add the 'All' values for each key that is just one squad: 
+    ALL_SQUADS.forEach(squad => {
+        const key = squad.toString();
+        const innerMap = new Map();
+        innerMap.set(key, 'All');
+        teamMap.set(key, innerMap);
+    });
+
+    // Split into rows
+    const rows = data.split('\n');
+    
+    // Skip header row and process each line
+    for (let i = 1; i < rows.length; i++) {
+        // Skip empty rows
+        if (rows[i].trim() === '') continue;
+        
+        // Split row by tab
+        const columns = rows[i].split('\t');
+        
+        // Process first group (columns 1-3)
+        if (columns[1] && columns[2] && columns[3]) {
+            const key = columns[1].trim();
+            const innerMap = new Map();
+            
+            // Add squad1 and its covering
+            innerMap.set(columns[2].trim(), columns[3].trim().replaceAll(' ', ''));
+            // Add squad2 and its covering
+            innerMap.set(columns[4].trim(), columns[5].trim().replaceAll(' ', ''));
+            
+            teamMap.set(key, innerMap);
+        }
+
+        // Process second group (columns 7-11)
+        if (columns[7] && columns[8] && columns[9]) {
+            const key = columns[7].trim();
+            const innerMap = new Map();
+            
+            // Add squad1 and its covering
+            innerMap.set(columns[8].trim(), columns[9].trim());
+            // Add squad2 and its covering
+            innerMap.set(columns[10].trim(), columns[11].trim().replaceAll(' ', ''));
+            // Add squad3 and its covering
+            innerMap.set(columns[12].trim(), columns[13].trim().replaceAll(' ', ''));
+            
+            teamMap.set(key, innerMap);
+        }
+    }
+    return teamMap;
+}
+
+// ===================================================================
 module.exports = {
     Squad,
     ShiftSlot,
+    ShiftSlotCollection,
     parseSchedulePastedInput,
     slotsToSS,
-    adjustMatrix: addShift,
+    addShift,
     generateTimeIntervals,
     slotsToMatrix,
-    matrix_to_slots,
     showShifts,
     showMatrix,
     removeShift,
-    matrixToSlots
+    matrixToSlots,
+    populateTerritories,
+    populateTango,
+    buildTeamMap
 }

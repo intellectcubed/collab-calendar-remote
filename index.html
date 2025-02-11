@@ -4,9 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Collaborative Calendar Manager</title>
+    <script src="js/workingStorage.js"></script>
     <script src="js/index.js"></script>
     <link rel="stylesheet" type="text/css" href="css/tables.css">
     <link rel="stylesheet" type="text/css" href="css/form.css">
+    <link rel="stylesheet" type="text/css" href="css/editShift.css">
+    <link rel="icon" type="image/x-icon" href="img/favicon-32x32.png">
     <style>
         textarea {
             width: 100%;
@@ -89,7 +92,9 @@
                         <option value="54">54</option>
                     </select>
                 </div>
+            </div>
     
+            <div class="form-row">
                 <div class="form-group">
                     <label for="quickTimes">Quick Times:</label>
                     <select id="quickTimes">
@@ -116,41 +121,159 @@
                     </select>
                 </div>
             </div>
-    
-            <div class="checkbox-group">
-                <label>
-                    <input type="checkbox" id="confirmCheckbox">
-                    I confirm these changes
-                </label>
-            </div>
-    
+        
             <div class="button-group">
-                <button class="add-btn">Add Shift</button>
-                <button class="remove-btn">Remove Shift</button>
-                <button class="obliterate-btn">Obliterate</button>
+                <button class="add-btn" onclick="insertShift()">Add Shift</button>
+                <button class="remove-btn" onclick="deleteShift()">Remove Shift</button>
+                <button class="obliterate-btn" onclick="obliterateShift()">Obliterate</button>
             </div>
         </div>
-    
 
-
-
-    <button id="copy" onclick="copyTest1ToClipboard('test1')">Test1</button>    
-    <button id="parse" onclick="parse_input()">Parse</button>
+        <div class="button-group">
+            <button id="copy" onclick="copyTest1ToClipboard('test1')">Test1</button>    
+            <button id="parse" onclick="parse_input()">Parse</button>
+        </div>
 
     <label for="previewTable">Original</label>
-    <table id="previewTable" class="styled-table"><thead><tr><th>Timeslot</th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
+    <table id="previewTable" class="styled-table"><thead><tr><th>Timeslot</th><th>Tango</th></th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
 
     <label for="modifiedTable">Modified</label>
-    <button class="add-btn">Revert</button>
+    
+    <div class="button-group">
+        <button class="add-btn">Revert</button>
+        <button onclick="togglePanel('myPanel')">Toggle Panel</button>
+    </div>
+    <!-- The panel container -->
+    <div id="myPanel" class="collapse_panel">
+        <!-- Your grouped divs go here -->
+        <div>
+            <div id="selectedShift"></div>
+            <label for="editShiftTango" style="float: left; margin-right: 10px;">Tango:</label>
+            <select id="editShiftTango" style="float: left;">
+                <option value="">Select</option>
+                <option value="34">34</option>
+                <option value="35">35</option>
+                <option value="42">42</option>
+                <option value="43">43</option>
+                <option value="54">54</option>
+            </select>
+        </div>
+        <div>
+            <div style="clear: both;" id="editShiftContainer">
+                <div class="label-group1">
+                    <label id="label1"></label>
+                    <div class="checkbox-group" id="checkgroup1"></div>
+                </div>
+                <div class="label-group2">
+                    <label id="label2"></label>
+                    <div class="checkbox-group" id="checkgroup2"></div>
+                </div>
+                <div class="label-group3">
+                    <label id="label3"></label>
+                    <div class="checkbox-group" id="checkgroup3"></div>
+                </div>
+            </div>
+        </div>
+        <div class="button-group">
+            <button class="half-height-button" onclick='applyEditing()'>Apply</button>
+            <button class="half-height-button" onclick='cancelEditing()'>Cancel</button>
+        </div>
+    </div>
 
-    <table id="modifiedTable" class="styled-table"><thead><tr><th>Timeslot</th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
+    <table id="modifiedTable" class="styled-table"><thead><tr><th>Modify</th><th>Timeslot</th><th>Tango</th></th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
 
     <button id="copy" onclick="copyToClipboard()">Copy</button>
 
     <script>
 
+        const PASTED_CALENDAR_DATA = 'CalendarDayCookie';
+        const STAGING_CALENDAR_DATA = 'StagingCalendarDayCookie';
+        let originalMatrix = [];
+        let modifiedMatrix = [];
+        let global_modifiedSlots = [];
+
+        const SHIFT_TABLES = Object.freeze({
+            original: 'previewTable',
+            modified: 'modifiedTable'
+        });
+        let territories = undefined;
+
+        function togglePanel(panelId) {
+            const panel = document.getElementById(panelId);
+            document.getElementById("selectedShift").innerHTML = "Hello";
+            panel.classList.toggle('show');
+        }
+
+
+        // ============================= Initialization after Doc is loaded ==================================
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeControls();
+            //TODO: Load the data from the cookie
+            const intervals = generateTimeIntervals();
+            originalMatrix = initializeScheduleMatrix(intervals); 
+            modifiedMatrix = initializeScheduleMatrix(intervals);
+
+            // Load the territories file and make it available
+            createTerritoryMap('data/territories.tsv')
+                .then(territoryMap => {
+                    territories = territoryMap;
+                });
+
+            
+        });
+        // ============================= Initialization after Doc is loaded ==================================
+
+
+        function initializeControls() {
+            // Get all select elements
+            const shiftStart = document.getElementById('shiftStart');
+            const shiftEnd = document.getElementById('shiftEnd');
+            const quickTimes = document.getElementById('quickTimes');
+            const currentShifts = document.getElementById('currentShifts');
+
+            // Group the selects into related sets that should clear each other
+            const timeInputs = {
+                manual: [shiftStart, shiftEnd],
+                preset: [quickTimes, currentShifts]
+            };
+
+            // Function to clear select elements
+            function clearSelects(selectsToKeep) {
+                // Clear all selects except the one that was just changed
+                const allSelects = [...timeInputs.manual, ...timeInputs.preset];
+                allSelects.forEach(select => {
+                    if (!selectsToKeep.includes(select)) {
+                        select.value = '';
+                    }
+                });
+            }
+
+            // Add event listeners to manual time inputs (shiftStart and shiftEnd)
+            timeInputs.manual.forEach(select => {
+                select.addEventListener('change', function() {
+                    if (this.value) {
+                        clearSelects(timeInputs.manual);
+                    }
+                });
+            });
+
+            // Add event listeners to preset time inputs (quickTimes and currentShifts)
+            timeInputs.preset.forEach(select => {
+                select.addEventListener('change', function() {
+                    if (this.value) {
+                        // Clear all other selects except this one
+                        clearSelects([this]);
+                    }
+                });
+            });
+
+        }
+
         function parse_input() {
             const outputTextarea = document.getElementById('transformed_csv_textarea');
+            console.log('Parsing input');
+            console.log('TODO: Validate each of the assigned territories.  If any deviations are found, you should alert them on the page')
+            // TODO: Validate each of the assigned territories.  If any deviations are found, you should alert them on the page
             getClipboardText().then(inputText => {
                 console.log(`Got input text: ${inputText}`);
                 slots = parseSchedulePastedInput(inputText);
@@ -158,17 +281,37 @@
                 populate_shift_table('previewTable', slots);
                 populate_shift_table('modifiedTable', slots);
                 outputTextarea.value = slotsToSS(slots);
+                Cookies.set(PASTED_CALENDAR_DATA, JSON.stringify(slots), 1);
+                Cookies.set(STAGING_CALENDAR_DATA, JSON.stringify(slots), 1);
             });
         }
 
-        function populate_shift_table(tableName, slots) {
+        function populate_shift_table(tableName, shiftSlots) {
+
+            // if (Cookies.get(STAGING_CALENDAR_DATA) === undefined) {
+            //     console.error('No staging data found');
+            //     return;
+            // }
+
+            // const slotCollection = ShiftSlotCollection.fromJsonString(JSON.parse(Cookies.get(STAGING_CALENDAR_DATA)));
+
+            // console.log(`Populating table ${tableName} with ${slotCollection.shiftSlots.length} slots`);
+
+            global_modifiedSlots = shiftSlots;
+
             const table = document.getElementById(tableName);
             const tbody = table.getElementsByTagName('tbody')[0];
             tbody.innerHTML = '';
 
-            slots.forEach(slot => {
+            let rowIndex = 0;
+            shiftSlots.forEach(slot => {
                 const tr = document.createElement('tr');
-                tableHtml = `<td>${padToFour(slot.startTime)} - ${padToFour(slot.endTime)}</td>`;
+                if (tableName == SHIFT_TABLES.modified) {
+                    tableHtml = `<td><a href="#" onclick="modifySlot(${rowIndex}); return false;">Modify</a></td>`;
+                } else {
+                    tableHtml = '';
+                }
+                tableHtml += `<td>${padToFour(slot.startTime)} - ${padToFour(slot.endTime)}</td><td>${slot.tango}</td>`;
                 const iterator = slot.squadIterator;
                 let next = iterator.next();
                 while (!next.done) {
@@ -179,7 +322,108 @@
                 }
                 tr.innerHTML = tableHtml;
                 tbody.appendChild(tr);
+                rowIndex++;
             });
+        }
+
+        function modifySlot(rowIdx) {
+            const selectedSlot = global_modifiedSlots[rowIdx];
+            document.getElementById("selectedShift").innerHTML = selectedSlot.toString();
+
+            document.getElementById('editShiftTango').value = selectedSlot.tango;
+            populateEditShiftPanel(selectedSlot);
+
+            // populateEditShift('Squad1', 'Squad2', 'Squad3');
+        }
+
+        function getShiftTimes() {
+            const shiftStart = document.getElementById('shiftStart').value;
+            const shiftEnd = document.getElementById('shiftEnd').value;
+            const quickTimes = document.getElementById('quickTimes').value;
+            const currentShifts = document.getElementById('currentShifts').value;
+
+            console.log(`Shift Start: ${shiftStart}, Shift End: ${shiftEnd}, Quick Times: ${quickTimes}, Current Shifts: ${currentShifts}`);
+
+            if (squads === '' || (quickTimes === '' && currentShifts === '' && (shiftStart === '' || shiftEnd === ''))) {
+                console.error('Missing required fields');
+                return;
+            }
+
+            let startTime = undefined;
+            let endTime = undefined;
+
+            if (quickTimes !== '') {
+                console.log(`Adding quick times: ${quickTimes} for squads ${squads}`);
+                startTime = quickTimes.split('-')[0];
+                endTime = quickTimes.split('-')[1];
+            } else if (currentShifts !== '') {
+                console.log(`Adding current shifts: ${currentShifts} for squads ${squads}`);
+                startTime = currentShifts.split('-')[0];
+                endTime = currentShifts.split('-')[1];
+            } 
+            
+            if (shiftStart !== '') {
+                startTime = shiftStart;
+            }
+            if (shiftEnd !== '') {
+                endTime = shiftEnd;
+            }
+                // && shiftEnd === '') {
+                // console.error('Missing required fields');
+                // startTime = shiftStart;
+                // endTime = shiftEnd;
+            
+            return {startTime, endTime};
+        }
+
+        function insertShift() {
+
+            const squads = document.getElementById('squads').value;
+            const shiftTimes = getShiftTimes();
+
+            if (squads === '' || shiftTimes.startTime === '' || shiftTimes.endTime === '') {
+                console.error('Missing required fields');
+                return;
+            }
+
+            const squad_call_id = parseInt(squads);
+            const squad = new Squad(squad_call_id)
+            const newSlot = new ShiftSlot(parseInt(shiftTimes.startTime), parseInt(shiftTimes.endTime), -1).addSquad(new Squad(squad_call_id, [34], 1)); // TODO: What about Tango?
+            console.log(`Adding slot: ${newSlot.toString()}`);
+
+            // console.log(`Cookies at the start: ${Cookies.get(STAGING_CALENDAR_DATA)}`);
+            // /** @type {ShiftSlotCollection} */
+            // const collection = (Cookies.get(STAGING_CALENDAR_DATA) != undefined ? ShiftSlotCollection.fromJsonString(Cookies.get(STAGING_CALENDAR_DATA)) : new ShiftSlotCollection());
+            // collection.addShiftSlot(newSlot);
+
+            // if (collection.size > 0) {
+            //     // Add to matrix, then back to collection
+            // }
+
+            addShift(modifiedMatrix, newSlot);
+            
+            // Cookies.set(STAGING_CALENDAR_DATA, collection.asJsonString(), 1);
+            // TODO: Should get the territories here
+            populate_shift_table(SHIFT_TABLES.modified, matrixToSlots(modifiedMatrix, territories));
+        }
+
+        function deleteShift() {
+            const squads = document.getElementById('squads').value;
+            const shiftTimes = getShiftTimes();
+
+            if (squads === '' || shiftTimes.startTime === '' || shiftTimes.endTime === '') {
+                console.error('Missing required fields');
+                return;
+            }
+
+            const squad_call_id = parseInt(squads);
+            const squad = new Squad(squad_call_id)
+            const newSlot = new ShiftSlot(parseInt(shiftTimes.startTime), parseInt(shiftTimes.endTime), -1).addSquad(new Squad(squad_call_id, [34], 1)); // TODO: What about Tango?
+            console.log(`Removing slot: ${newSlot.toString()}`);
+
+            removeShift(modifiedMatrix, newSlot);
+            populate_shift_table(SHIFT_TABLES.modified, matrixToSlots(modifiedMatrix, territories));
+
         }
 
 
@@ -196,14 +440,18 @@
         function copyToClipboard() {
             try {
                 // Get the textarea element
-                const textarea = document.getElementById('transformed_csv_textarea');
+                // const textarea = document.getElementById('transformed_csv_textarea');
                 
-                // Select the text
-                textarea.select();
+                // // Select the text
+                // textarea.select();
                 
-                // Copy to clipboard
-                navigator.clipboard.writeText(textarea.value)
-                    .then(() => {
+                // // Copy to clipboard
+                // navigator.clipboard.writeText(textarea.value)
+
+                const ssText = slotsToSS(matrixToSlots(modifiedMatrix));
+
+                navigator.clipboard.writeText(ssText)
+                .then(() => {
                         console.log('Text copied successfully');
                         // Optional: provide user feedback
                         alert('Copied to clipboard!');
@@ -241,14 +489,146 @@
             }
         }
 
+        function obliterateShift() {
+            const key = '34,43';
+            console.log(`Territories: ${territories}`);
+            // console.log(`Here is the value: ${territories.get(key).get(squad.callId)}`);
+            console.log(`Here is the value: ${territories.get('34,43').get('34')}`);
+        }
+
 
         // function copyToClipboard() {
         //     const outputTextarea = document.getElementById('transformed_csv_textarea');
         //     console.log('Copying to clipboard:', outputTextarea.value);
         //     outputTextarea.select();
         //     document.execCommand('copy');
-        //     alert('Copied to clipboard!');
+        //     alert('Copied to clipboard!');        
         // }
+
+        //!-- Edit shift panel -->
+        function populateEditShift(label1Text, label2Text, label3Text) {
+            const values = [34, 35, 42, 43, 54];
+    
+            // Set labels
+            document.getElementById('label1').textContent = label1Text;
+            document.getElementById('label2').textContent = label2Text;
+            document.getElementById('label3').textContent = label3Text;
+            
+            // Create checkboxes for each group
+            ['checkgroup1', 'checkgroup2', 'checkgroup3'].forEach(groupId => {
+                const group = document.getElementById(groupId);
+                group.innerHTML = ''; // Clear existing
+                values.forEach(value => {
+                    group.innerHTML += `
+                        <div>
+                            <input type="checkbox" 
+                                id="${groupId}_${value}" 
+                                value="${value}"
+                                name="${groupId}">
+                            <label for="${groupId}_${value}">${value}</label>
+                        </div>`;
+                });
+            });
+        }
+
+        function populateEditShiftPanel(selectedSlot) {
+            const values = [34, 35, 42, 43, 54];
+
+            let currentSquadIdx = 0;
+            Array.from(selectedSlot.squads.keys()).sort().forEach(squadKey => {
+                console.log(`Squad key: ${squadKey}`);
+                const squad = selectedSlot.squads.get(new String(squadKey));
+                console.log(`Squad: ${squad.call_id}`);
+                const groupId = `checkgroup${currentSquadIdx + 1}`;
+                const group = document.getElementById(groupId);
+                group.innerHTML = ''; // Clear existing
+                values.forEach(value => {
+                    const checked = squad.call_id === value;
+                    group.innerHTML += `
+                        <div>
+                            <input type="checkbox" 
+                                id="${groupId}_${value}" 
+                                value="${value}"
+                                name="${groupId}"
+                                ${checked ? 'checked' : ''}>
+                            <label for="${groupId}_${value}">${value}</label>
+                        </div>`;
+                });
+                currentSquadIdx++;
+            });
+            // selectedSlot.squads.forEach(squad => {
+            //     console.log(`Squad: ${squad.call_id}`);
+            // });
+
+
+
+            // const squads = selectedSlot.squads;
+            // const squad1 = squads[0];
+            // const squad2 = squads[1];
+            // const squad3 = squads[2];
+
+            // console.log(`How many slots? ${squads.keys()}`);
+
+            // // Set labels
+            // document.getElementById('label1').textContent = squad1 ? squad1.call_id : '';
+            // document.getElementById('label2').textContent = squad2 ? squad2.call_id : '';
+            // document.getElementById('label3').textContent = squad3 ? squad3.call_id : '';
+            
+            // // Create checkboxes for each group
+            // ['checkgroup1', 'checkgroup2', 'checkgroup3'].forEach((groupId, index) => {
+            //     const group = document.getElementById(groupId);
+            //     group.innerHTML = ''; // Clear existing
+            //     values.forEach(value => {
+            //         if (index < squads.length) {
+            //             const checked = selectedSlot.squads[index].call_id === value;
+            //             group.innerHTML += `
+            //                 <div>
+            //                     <input type="checkbox" 
+            //                         id="${groupId}_${value}" 
+            //                         value="${value}"
+            //                         name="${groupId}"
+            //                         ${checked ? 'checked' : ''}>
+            //                     <label for="${groupId}_${value}">${value}</label>
+            //                 </div>`;
+            //         }
+            //     });
+            // });
+        }
+
+
+        function getModifiedShift() {
+            const result = {
+                group1: [],
+                group2: [],
+                group3: []
+            };
+            
+            // Get checked values for each group
+            ['checkgroup1', 'checkgroup2', 'checkgroup3'].forEach((groupId, index) => {
+                const groupKey = `group${index + 1}`;
+                const checkboxes = document.querySelectorAll(`#${groupId} input:checked`);
+                result[groupKey] = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            });
+            
+            // Clear all checkboxes and labels
+            ['label1', 'label2', 'label3'].forEach(labelId => {
+                document.getElementById(labelId).textContent = '';
+            });
+            
+            ['checkgroup1', 'checkgroup2', 'checkgroup3'].forEach(groupId => {
+                document.getElementById(groupId).innerHTML = '';
+            });
+            
+            return result;
+        }        
+
+    //-- Edit shift panel END -->
     </script>
 </body>
 </html>
+
+<!--
+In order for cookies to work, you need to serve this page from an http server: 
+python3 -m http.server 8000 --directory /Users/gnowakow/Projects/website/collab_calendar
+Then, open the page in the browser: http://localhost:8000/index.html
+-->

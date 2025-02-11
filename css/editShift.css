@@ -1,0 +1,42 @@
+#editShiftContainer {
+    display: flex;
+    justify-content: space-between;  /* evenly distribute across width */
+    gap: 20px;  /* space between boxes */
+    width: 100%;
+}
+
+.checkbox-group {
+    display: flex;
+    justify-content: center;  /* centers horizontally */
+    align-items: center;     /* centers vertically */
+    gap: 10px;              /* space between checkboxes */
+}
+
+/* If you also want to center the label above the checkboxes */
+.label-group1, .label-group2, .label-group3 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;     /* centers the label and checkbox group */
+    flex: 1;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: white;
+}
+/* Optional: hover effect */
+.label-group1:hover, .label-group2:hover, .label-group3:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transition: box-shadow 0.3s ease;
+}
+
+/* If you want different border colors for each group */
+.label-group1 {
+    border-color: #007bff;
+}
+.label-group2 {
+    border-color: #28a745;
+}
+.label-group3 {
+    border-color: #dc3545;
+}
