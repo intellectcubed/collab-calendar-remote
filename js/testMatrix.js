@@ -83,8 +83,7 @@ function assertEqualSlots(slots, matrix) {
             funs.showMatrix(matrix);
         }
         funs.showShifts(slots);
-        console.log(`Expected: ${JSON.stringify(expectedResults)}\nActual: \n`);
-        console.log(slotsAsString.replaceAll('"' , '\\"'));
+        console.log(`Expected: ${JSON.stringify(expectedResults)}\nActual  : ${slotsAsString.replaceAll('"' , '\\"')}`);
     }
 }
 
@@ -104,90 +103,12 @@ function compareArrays(arr1, arr2) {
     let allMatch = true;
     arr1.forEach((element, index) => {
         if (element.toString() !== arr2[index].toString()) {
-            console.log(`Mismatch at index ${index}: ${element} !== ${arr2[index]}`);
+            console.log(`Mismatch at index ${index} (Expected followed by Actual):\nE:${element}\nA:${arr2[index]}`);
             allMatch = false;
         }
     });
     
     return allMatch;
-}
-
-
-
-// function invokeTest(testName) {
-//     if (resultsDoc) {
-//         global[testName](resultsDoc[testName]['expectedResult']);
-//         return;
-//     } else {   
-//         readJsonFile('/Users/gnowakow/Projects/website/collab_calendar/js/expectedResults.json')
-//             .then(data => {
-//                 resultsDoc = data;
-//                 global[testName](data[testName]['expectedResult']);
-//             });
-//     }
-// }
-
-// function invokeTest(testName) {
-//     if (resultsDoc) {
-//         global[testName](resultsDoc[testName]['expectedResult']);
-//         return;
-//     }
-// }
-// function invoke(functionName) {
-//     const functionToCall = global[functionName];
-    
-//     if (typeof functionToCall !== 'function') {
-//         throw new Error(`Function ${functionName} is not defined`);
-//     }
-//     functionToCall(territoryMap, resultsDoc[functionName]['expectedResult'])
-// }
-
-// async function invoke(functionName, expectedResultsFile, territoriesFile = null) {
-//     try {
-//         // Read the expected results file
-//         const expectedResults = await readJsonFile(expectedResultsFile);
-
-//         // console.log(GT, `Running test: ${functionName} ${JSON.stringify(expectedResults)}`);
-        
-//         // Get the function to call by name (assuming it's defined in global scope)
-//         const functionToCall = global[functionName];
-        
-//         if (typeof functionToCall !== 'function') {
-//             throw new Error(`Function ${functionName} is not defined`);
-//         }
-
-//         // If territoriesFile is provided, read it and call function with both parameters
-//         if (territoriesFile) {
-//             const data = await readFile(territoriesFile);
-//             const territoryMap = funs.buildTeamMap(data);
-//             console.log(GT, `Territories: ${territories}`);
-//             functionToCall(territoryMap, expectedResults[functionName]['expectedResult'])
-//             return;
-//         } else {
-//             // Call function with single parameter
-//             functionToCall(expectedResults[functionName]['expectedResult'])
-//             return;
-//         }
-//     } catch (error) {
-//         console.error('Error in processFiles:', error);
-//         throw error;
-//     }
-// }
-
-function compare_results(actual, expected) {
-    if (actual.length != expected.length) {
-        console.error('Lengths do not match');
-        return false;
-    }
-
-    for (let i = 0; i < actual.length; i++) {
-        if (actual[i] != expected[i]) {
-            console.error(`Mismatch at index ${i} - ${actual[i]} != ${expected[i]}`);
-            return false;
-        }
-    }
-
-    return true;
 }
 
 function matrixTest(slots, testName, expectedResults) {
@@ -196,6 +117,22 @@ function matrixTest(slots, testName, expectedResults) {
 }
 
 function compareTestResults(matrix, testName, expectedResults) {
+    function compare_results(actual, expected) {
+        if (actual.length != expected.length) {
+            console.error('Lengths do not match');
+            return false;
+        }
+    
+        for (let i = 0; i < actual.length; i++) {
+            if (actual[i] != expected[i]) {
+                console.error(`Mismatch at index ${i} - ${actual[i]} != ${expected[i]}`);
+                return false;
+            }
+        }
+    
+        return true;
+    }
+    
     if (!compare_results(JSON.stringify(matrix), expectedResults.replaceAll('\\"', '"'))) {
         funs.showMatrix(matrix);
         console.error(`\nError: ${testName}`)
@@ -205,6 +142,10 @@ function compareTestResults(matrix, testName, expectedResults) {
     } else {
         console.log(GTB, `${testName} passed`);
     }
+}
+
+function compareSlots(slots1, slots2) {
+    throw new Error('Not implemented');
 }
 
 
@@ -494,13 +435,112 @@ function testTerritoriesThreeCrewsRemoveCrew() {
     assertEqualSlots(newSlots, matrix);
 }
 
+function testParseSchedulePastedInput() {
+
+    const schedule_input = `"0600 - 1200
+(Tango:54)"	"42
+[35, 42]"	"54
+[34, 43, 54]"	
+"1200 - 1300
+(Tango:54)"	"42
+['All']"	"54
+['No Crew']"	
+"1300 - 1600
+(Tango:54)"	"42
+[35, 42]"	"54
+[34, 43, 54]"	
+"1600 - 1800
+(Tango:54)"	"42
+['All']"	"54
+['No Crew']"	
+"1800 - 0600
+(Tango:43)"	"42
+[35, 42, 54]"	"43
+[34, 43]"	`;
+
+    const expected_slots = [
+        new funs.ShiftSlot(600, 1200, 54)
+            .addSquad(new funs.Squad(42, [35, 42], 1))
+            .addSquad(new funs.Squad(54, [34, 43, 54], 1)),
+
+        new funs.ShiftSlot(1200, 1300, 54)
+        .addSquad(new funs.Squad(42, [34,35,42,43,54], 1))
+        .addSquad(new funs.Squad(54, [], 0)),
+
+        new funs.ShiftSlot(1300, 1600, 54)
+        .addSquad(new funs.Squad(42, [35, 42], 1))
+        .addSquad(new funs.Squad(54, [34, 43, 54], 1)),
+
+        new funs.ShiftSlot(1600, 1800, 54)
+        .addSquad(new funs.Squad(42, [34,35,42,43,54], 1))
+        .addSquad(new funs.Squad(54, [], 0)),
+
+        new funs.ShiftSlot(1800, 600, 43)
+        .addSquad(new funs.Squad(42, [35, 42, 54], 1))
+        .addSquad(new funs.Squad(43, [34, 43], 1))
+    ];
+
+
+    const result = funs.parseSchedulePastedInput(schedule_input);
+    if (compareArrays(expected_slots, result)) {
+        console.log(GTB, 'testParseSchedulePastedInput passed');
+    } else {
+        console.error('testParseSchedulePastedInput failed');
+    }
+}
+
+function testSSSerDe() {
+    const schedule_input = `"0600 - 1200
+(Tango:54)"	"42
+[35, 42]"	"54
+[34, 43, 54]"	
+"1200 - 1300
+(Tango:54)"	"42
+['All']"	"54
+['No Crew']"	
+"1300 - 1600
+(Tango:54)"	"42
+[35, 42]"	"54
+[34, 43, 54]"	
+"1600 - 1800
+(Tango:54)"	"42
+['All']"	"54
+['No Crew']"	
+"1800 - 0600
+(Tango:43)"	"42
+[35, 42, 54]"	"43
+[34, 43]"	`;
+
+    const result = funs.parseSchedulePastedInput(schedule_input);
+    const actual = funs.slotsToSS(result)
+
+    if (schedule_input === actual) {
+        console.log(GTB, 'testSSSerDe passed');
+    } else {
+        console.log(`Expected: |${JSON.stringify(schedule_input)}|`);
+        console.log(`\nActual  : |${JSON.stringify(actual)}|`);
+        console.log('testSSSerDe failed');
+    }
+
+}
+
+function testSquad() {
+    const squad = new funs.Squad(42, [35, 42], 1);
+    assert.equal(squad.toString(), 'Squad: 42 (trk=1) covering [35,42]');
+
+    const squad2 = new funs.Squad(42);
+    assert.equal(squad2.toString(), 'Squad: 42 (trk=1) covering []');
+
+    const squad3 = new funs.Squad(42, [], number_of_trucks=0);
+    assert.equal(squad3.toString(), 'Squad: 42 (trk=0) covering []');
+
+}
+
 
 // Run the tests!!!!
 function runTests() {
-
     testGenerateTimeIntervals();
     testSquadIterator();
-
     testAddSquadStart();
     testAddSquadEnd();
     testAddSquads1();
@@ -511,7 +551,6 @@ function runTests() {
     testTerritoryPopulationSingle();
     testTerritoryPopulation();
     testTangoPopulation();
-
     testIsCombinable();
     testSerDe();
     testSlotsToSS();
@@ -521,11 +560,14 @@ function runTests() {
     testTerritoriesThreeCrewsNoCrew();
     testTerritoriesTwoCrewsRemoveCrew();
     testTerritoriesThreeCrewsRemoveCrew();
+    testParseSchedulePastedInput();
+    testSSSerDe();
+    testSquad();
 }
 
 
 // ==== Main =====
-readTestState('/Users/gnowakow/Projects/website/collab_calendar/js/expectedResults.json', '/Users/gnowakow/Projects/website/collab_calendar/data/territories.tsv')
+readTestState('/Users/gnowakow/Projects/website/collab-calendar-remote/js/expectedResults.json', '/Users/gnowakow/Projects/website/collab-calendar-remote/data/territories.tsv')
     .then(() => {
         runTests();
         console.log(GT, 'All tests passed');

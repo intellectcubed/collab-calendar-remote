@@ -3,14 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Collaborative Calendar Manager</title>
+    <title>Collaberative Calendar Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
     <script src="js/workingStorage.js"></script>
     <script src="js/index.js"></script>
+    <script src="js/popUpForm.js"></script>
     <link rel="stylesheet" type="text/css" href="css/tables.css">
     <link rel="stylesheet" type="text/css" href="css/form.css">
     <link rel="stylesheet" type="text/css" href="css/editShift.css">
+    <link rel="stylesheet" type="text/css" href="css/popUpForm.css">
     <link rel="icon" type="image/x-icon" href="img/favicon-32x32.png">
     <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+        }
         textarea {
             width: 100%;
             min-height: 200px;
@@ -24,14 +30,18 @@
         }
         label {
             font-weight: bold;
-            font-size: 16px;
+            font-size: 13px;
         }
     </style>
 </head>
 <body>
-    <h1>Collaborative Calendar Manager</h1>
 
     <textarea id="transformed_csv_textarea" style="display: none;">Hidden content</textarea>
+    <div class="button-group">
+        <button id="copy" onclick="copyTest1ToClipboard('test1')">Test1</button>    
+        <button id="parse" onclick="parse_input()">Parse</button>
+    </div>
+ 
 
 
         <div class="panel">
@@ -84,7 +94,7 @@
                 <div class="form-group">
                     <label for="squads">Squads:</label>
                     <select id="squads">
-                        <option value="">Select squad</option>
+                        <option value="">Select</option>
                         <option value="34">34</option>
                         <option value="35">35</option>
                         <option value="42">42</option>
@@ -125,64 +135,68 @@
             <div class="button-group">
                 <button class="add-btn" onclick="insertShift()">Add Shift</button>
                 <button class="remove-btn" onclick="deleteShift()">Remove Shift</button>
-                <button class="obliterate-btn" onclick="obliterateShift()">Obliterate</button>
+                <button class="obliterate-btn" onclick="deleteShift(true)">Obliterate</button>
             </div>
         </div>
 
-        <div class="button-group">
-            <button id="copy" onclick="copyTest1ToClipboard('test1')">Test1</button>    
-            <button id="parse" onclick="parse_input()">Parse</button>
-        </div>
-
-    <label for="previewTable">Original</label>
-    <table id="previewTable" class="styled-table"><thead><tr><th>Timeslot</th><th>Tango</th></th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
-
-    <label for="modifiedTable">Modified</label>
-    
+        <div class="tbl_container">
+    <table id="previewTable" class="styled-table"><caption>Preview Table</caption></caption><thead><tr><th>Timeslot</th><th>Tango</th></th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
+</div>
     <div class="button-group">
-        <button class="add-btn">Revert</button>
-        <button onclick="togglePanel('myPanel')">Toggle Panel</button>
+        <button class="add-btn" onclick="revertModifiedSchedule()">Revert</button>
+        <!-- <button onclick="togglePanel('myPanel')">Toggle Panel</button> -->
     </div>
-    <!-- The panel container -->
-    <div id="myPanel" class="collapse_panel">
-        <!-- Your grouped divs go here -->
-        <div>
-            <div id="selectedShift"></div>
-            <label for="editShiftTango" style="float: left; margin-right: 10px;">Tango:</label>
-            <select id="editShiftTango" style="float: left;">
-                <option value="">Select</option>
-                <option value="34">34</option>
-                <option value="35">35</option>
-                <option value="42">42</option>
-                <option value="43">43</option>
-                <option value="54">54</option>
-            </select>
-        </div>
-        <div>
-            <div style="clear: both;" id="editShiftContainer">
-                <div class="label-group1">
-                    <label id="label1"></label>
-                    <div class="checkbox-group" id="checkgroup1"></div>
+    <table id="modifiedTable" class="styled-table"><caption>Modified Day</caption><thead><tr><th>Modify</th><th>Timeslot</th><th>Tango</th></th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
+
+    <button id="copy" class="copy-btn" onclick="copyToClipboard()">Copy</button>
+
+    <!-- Edit shift popUp panel -->
+    <div id="popupForm" class="popup">
+        <div class="popup-content">
+            <span class="close" onclick="closePopup()">&times;</span>
+            <div id="myPanel" class="shift_panel">
+                <!-- Your grouped divs go here -->
+                <div>
+                    <div id="selectedShift"></div>
+                    <div class="tango-container">
+                        <label for="editShiftTango">Tango:</label>
+                        <select id="editShiftTango">
+                            <option value="">Select</option>
+                            <option value="34">34</option>
+                            <option value="35">35</option>
+                            <option value="42">42</option>
+                            <option value="43">43</option>
+                            <option value="54">54</option>
+                        </select>
+                    </div>                
                 </div>
-                <div class="label-group2">
-                    <label id="label2"></label>
-                    <div class="checkbox-group" id="checkgroup2"></div>
+
+                    <div>
+                        <div style="clear: both;" id="editShiftContainer">
+                            <div class="label-group0">
+                                <label id="popup_squad_0"></label>
+                                <div class="checkbox-group" id="checkgroup0"></div>
+                            </div>
+                            <div class="label-group1">
+                                <label id="popup_squad_1"></label>
+                                <div class="checkbox-group" id="checkgroup1"></div>
+                            </div>
+                            <div class="label-group2">
+                                <label id="popup_squad_2"></label>
+                                <div class="checkbox-group" id="checkgroup2"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="label-group3">
-                    <label id="label3"></label>
-                    <div class="checkbox-group" id="checkgroup3"></div>
+
+                <div class="button-group">
+                    <button class="half-height-button" onclick='applyEditing()'>Apply</button>
+                    <button class="half-height-button" onclick='cancelEditing()'>Cancel</button>
                 </div>
             </div>
         </div>
-        <div class="button-group">
-            <button class="half-height-button" onclick='applyEditing()'>Apply</button>
-            <button class="half-height-button" onclick='cancelEditing()'>Cancel</button>
-        </div>
     </div>
-
-    <table id="modifiedTable" class="styled-table"><thead><tr><th>Modify</th><th>Timeslot</th><th>Tango</th></th><th>Squad1</th><th>Squad2</th><th>Squad3</th></tr></thead><tbody></tbody></table>
-
-    <button id="copy" onclick="copyToClipboard()">Copy</button>
+    <!---->
 
     <script>
 
@@ -190,6 +204,7 @@
         const STAGING_CALENDAR_DATA = 'StagingCalendarDayCookie';
         let originalMatrix = [];
         let modifiedMatrix = [];
+        let pastedSlots = [];
         let global_modifiedSlots = [];
 
         const SHIFT_TABLES = Object.freeze({
@@ -197,12 +212,6 @@
             modified: 'modifiedTable'
         });
         let territories = undefined;
-
-        function togglePanel(panelId) {
-            const panel = document.getElementById(panelId);
-            document.getElementById("selectedShift").innerHTML = "Hello";
-            panel.classList.toggle('show');
-        }
 
 
         // ============================= Initialization after Doc is loaded ==================================
@@ -269,20 +278,22 @@
 
         }
 
+        function revertModifiedSchedule() {
+            modifiedMatrix = slotsToMatrix(pastedSlots);
+            populate_shift_table('modifiedTable', pastedSlots);
+        }
+
         function parse_input() {
             const outputTextarea = document.getElementById('transformed_csv_textarea');
-            console.log('Parsing input');
             console.log('TODO: Validate each of the assigned territories.  If any deviations are found, you should alert them on the page')
             // TODO: Validate each of the assigned territories.  If any deviations are found, you should alert them on the page
             getClipboardText().then(inputText => {
-                console.log(`Got input text: ${inputText}`);
-                slots = parseSchedulePastedInput(inputText);
-                console.log(JSON.stringify(slots));
-                populate_shift_table('previewTable', slots);
-                populate_shift_table('modifiedTable', slots);
-                outputTextarea.value = slotsToSS(slots);
-                Cookies.set(PASTED_CALENDAR_DATA, JSON.stringify(slots), 1);
-                Cookies.set(STAGING_CALENDAR_DATA, JSON.stringify(slots), 1);
+                pastedSlots = parseSchedulePastedInput(inputText);
+                originalMatrix = slotsToMatrix(pastedSlots);
+                modifiedMatrix = slotsToMatrix(pastedSlots);
+                populate_shift_table('previewTable', pastedSlots);
+                populate_shift_table('modifiedTable', pastedSlots);
+                outputTextarea.value = slotsToSS(pastedSlots);
             });
         }
 
@@ -315,7 +326,6 @@
                 const iterator = slot.squadIterator;
                 let next = iterator.next();
                 while (!next.done) {
-                    console.log(next.value);
                     tableHtml += `<td>${next.value.call_id}(${next.value.number_of_trucks})<br/>[${next.value.territoriesCovered}]</td>`;
                     next = iterator.next();
 
@@ -327,13 +337,12 @@
         }
 
         function modifySlot(rowIdx) {
+            openPopup();
             const selectedSlot = global_modifiedSlots[rowIdx];
             document.getElementById("selectedShift").innerHTML = selectedSlot.toString();
 
             document.getElementById('editShiftTango').value = selectedSlot.tango;
             populateEditShiftPanel(selectedSlot);
-
-            // populateEditShift('Squad1', 'Squad2', 'Squad3');
         }
 
         function getShiftTimes() {
@@ -368,10 +377,6 @@
             if (shiftEnd !== '') {
                 endTime = shiftEnd;
             }
-                // && shiftEnd === '') {
-                // console.error('Missing required fields');
-                // startTime = shiftStart;
-                // endTime = shiftEnd;
             
             return {startTime, endTime};
         }
@@ -407,7 +412,7 @@
             populate_shift_table(SHIFT_TABLES.modified, matrixToSlots(modifiedMatrix, territories));
         }
 
-        function deleteShift() {
+        function deleteShift(obliterate = false) {
             const squads = document.getElementById('squads').value;
             const shiftTimes = getShiftTimes();
 
@@ -420,8 +425,9 @@
             const squad = new Squad(squad_call_id)
             const newSlot = new ShiftSlot(parseInt(shiftTimes.startTime), parseInt(shiftTimes.endTime), -1).addSquad(new Squad(squad_call_id, [34], 1)); // TODO: What about Tango?
             console.log(`Removing slot: ${newSlot.toString()}`);
+            showMatrix(modifiedMatrix);
 
-            removeShift(modifiedMatrix, newSlot);
+            removeShift(modifiedMatrix, newSlot, obliterate);
             populate_shift_table(SHIFT_TABLES.modified, matrixToSlots(modifiedMatrix, territories));
 
         }
@@ -439,16 +445,7 @@
 
         function copyToClipboard() {
             try {
-                // Get the textarea element
-                // const textarea = document.getElementById('transformed_csv_textarea');
-                
-                // // Select the text
-                // textarea.select();
-                
-                // // Copy to clipboard
-                // navigator.clipboard.writeText(textarea.value)
-
-                const ssText = slotsToSS(matrixToSlots(modifiedMatrix));
+                const ssText = slotsToSS(global_modifiedSlots);
 
                 navigator.clipboard.writeText(ssText)
                 .then(() => {
@@ -506,46 +503,22 @@
         // }
 
         //!-- Edit shift panel -->
-        function populateEditShift(label1Text, label2Text, label3Text) {
-            const values = [34, 35, 42, 43, 54];
-    
-            // Set labels
-            document.getElementById('label1').textContent = label1Text;
-            document.getElementById('label2').textContent = label2Text;
-            document.getElementById('label3').textContent = label3Text;
-            
-            // Create checkboxes for each group
-            ['checkgroup1', 'checkgroup2', 'checkgroup3'].forEach(groupId => {
-                const group = document.getElementById(groupId);
-                group.innerHTML = ''; // Clear existing
-                values.forEach(value => {
-                    group.innerHTML += `
-                        <div>
-                            <input type="checkbox" 
-                                id="${groupId}_${value}" 
-                                value="${value}"
-                                name="${groupId}">
-                            <label for="${groupId}_${value}">${value}</label>
-                        </div>`;
-                });
-            });
-        }
 
         function populateEditShiftPanel(selectedSlot) {
             const values = [34, 35, 42, 43, 54];
 
             let currentSquadIdx = 0;
             Array.from(selectedSlot.squads.keys()).sort().forEach(squadKey => {
-                console.log(`Squad key: ${squadKey}`);
-                const squad = selectedSlot.squads.get(new String(squadKey));
-                console.log(`Squad: ${squad.call_id}`);
-                const groupId = `checkgroup${currentSquadIdx + 1}`;
+                document.getElementById(`popup_squad_${currentSquadIdx}`).textContent = squadKey;
+                const squad = selectedSlot.squads.get(squadKey);
+                const groupId = `checkgroup${currentSquadIdx}`;
                 const group = document.getElementById(groupId);
-                group.innerHTML = ''; // Clear existing
+                group.innerHTML = ''; 
+
                 values.forEach(value => {
-                    const checked = squad.call_id === value;
+                    const checked = squad.territoriesCovered.includes(value);
                     group.innerHTML += `
-                        <div>
+                        <div class='checkbox-container'>
                             <input type="checkbox" 
                                 id="${groupId}_${value}" 
                                 value="${value}"
@@ -556,43 +529,7 @@
                 });
                 currentSquadIdx++;
             });
-            // selectedSlot.squads.forEach(squad => {
-            //     console.log(`Squad: ${squad.call_id}`);
-            // });
 
-
-
-            // const squads = selectedSlot.squads;
-            // const squad1 = squads[0];
-            // const squad2 = squads[1];
-            // const squad3 = squads[2];
-
-            // console.log(`How many slots? ${squads.keys()}`);
-
-            // // Set labels
-            // document.getElementById('label1').textContent = squad1 ? squad1.call_id : '';
-            // document.getElementById('label2').textContent = squad2 ? squad2.call_id : '';
-            // document.getElementById('label3').textContent = squad3 ? squad3.call_id : '';
-            
-            // // Create checkboxes for each group
-            // ['checkgroup1', 'checkgroup2', 'checkgroup3'].forEach((groupId, index) => {
-            //     const group = document.getElementById(groupId);
-            //     group.innerHTML = ''; // Clear existing
-            //     values.forEach(value => {
-            //         if (index < squads.length) {
-            //             const checked = selectedSlot.squads[index].call_id === value;
-            //             group.innerHTML += `
-            //                 <div>
-            //                     <input type="checkbox" 
-            //                         id="${groupId}_${value}" 
-            //                         value="${value}"
-            //                         name="${groupId}"
-            //                         ${checked ? 'checked' : ''}>
-            //                     <label for="${groupId}_${value}">${value}</label>
-            //                 </div>`;
-            //         }
-            //     });
-            // });
         }
 
 

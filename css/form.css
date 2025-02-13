@@ -1,8 +1,9 @@
         .panel {
             border: 1px solid #ccc;
-            padding: 20px;
+            padding: 10px;
             border-radius: 5px;
-            width: 100%;
+            width: 95%;
+            height:175px;
             max-width: 1200px;
             background-color: #f9f9f9;
         }
@@ -19,17 +20,20 @@
         }
 
         label {
-            display: block;
+            /* display: block; */
             margin-bottom: 5px;
             font-weight: bold;
             white-space: nowrap;
+            vertical-align: middle;
         }
 
         select {
-            width: 75%;
+            width: 35%;
             padding: 8px;
             border-radius: 4px;
             border: 1px solid #ddd;
+            margin-top: 15px;
+            margin-bottom: 15px;
         }
 
         .button-group {
@@ -68,24 +72,18 @@
             color: white;
         }
 
+        .copy-btn {
+            background-color: #2c0ad2d5;
+            color: white;
+        }
+
         .checkbox-group {
             margin-top: 20px;
+            font-size: small;
         }
-
-        .collapse_panel {
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin: 10px;
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
-        }
-        
-        .collapse_panel.show {
-            max-height: 500px; /* Adjust based on content */
-        }        
 
         #editShiftContainer {
+            width: 90%;
             display: flex;
             gap: 20px;  /* space between label groups */
         }
@@ -100,6 +98,26 @@
             gap: 10px;  /* space between checkboxes */
         }
         
+        .container-wrapper {
+            display: flex;
+            justify-content: flex-start;  /* or 'space-between' for equal spacing */
+            width: 330px;  /* Allows for 3 x 100px containers plus margins */
+        }
+        
+        .checkbox-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 20px;
+            margin-right: 5px;
+            display: inline-block;
+        }
+
+        .checkbox-container label {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+        }
+
         label:empty {
             display: none;
         }        
@@ -108,4 +126,25 @@
             color: red;
             font-family: Arial, sans-serif;
         }
+
+        .tango-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px; /* Adds some space below this group */
+        }
+        
+        .tango-container label {
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+        
+        #editShiftTango {
+            flex: 1;
+            max-width: 200px;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        
+            
     

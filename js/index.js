@@ -1,10 +1,10 @@
 
 class Squad {
-    constructor(call_id, territories_covered, number_of_trucks=1, is_first_responder=false) {
+    constructor(call_id, territories_covered=[], number_of_trucks=1, is_first_responder=false) {
         this.call_id = call_id;
-        this.territories_covered = territories_covered;
-        this.number_of_trucks = number_of_trucks;
-        this.is_first_responder = is_first_responder;
+        this.territoriesCovered = territories_covered; 
+        this.numberOfTrucks = number_of_trucks;
+        this.isFirstResponder = is_first_responder;
     }
 
     static fromInstance(instance) {
@@ -25,13 +25,48 @@ class Squad {
         );
     }
 
+    set numberOfTrucks(trucks) {
+        if (trucks !== undefined) {
+            if (!Number.isInteger(trucks)) {
+                throw new Error('Parameter must be an integer');
+            }
+            this.number_of_trucks = trucks;
+        }
+    }
+
+    set territoriesCovered(territories) {
+        if (territories !== undefined) {
+            // Check if it's an array
+            if (!Array.isArray(territories)) {
+                throw new Error(`Parameter must be an array.  Received: ${territories} of type: ${typeof territories}`);
+            }
+            
+            // Check if all elements are integers
+            if (territories.length > 0 && !territories.every(num => Number.isInteger(num))) {
+                throw new Error('All elements must be integers');
+            }
+            
+            this.territories_covered = [...territories];
+        }
+    }
+
+    set isFirstResponder(isFirstResponder) {
+        if (isFirstResponder !== undefined) {
+            if (typeof isFirstResponder !== 'boolean') {
+                throw new Error('Parameter must be a boolean');
+            }
+            this.is_first_responder = isFirstResponder;
+        }
+    }
+        
+
     // Optional: Add getters and setters
     get callId() {
         return this.call_id;
     }
 
     get territoriesCovered() {
-        return this.territories_covered;
+        return [...(this.territories_covered) || []];
     }
 
     get numberOfTrucks() {
@@ -43,7 +78,7 @@ class Squad {
     }
 
     toString() {
-        return `${this.call_id} (trk=${this.number_of_trucks}) covering [${this.territories_covered}]`;
+        return `Squad: ${this.call_id} (trk=${this.number_of_trucks}) covering [${this.territories_covered}]`;
     }
 
     asJsonString() {
@@ -69,7 +104,7 @@ class ShiftSlot {
         }
         this._squads.forEach(squad => {
             if (squad.number_of_trucks === 0) {
-                squad.territories_covered = ['No Crew'];
+                squad.territories_covered = [];
             } else {
                 if (!squadTerritoryMap.has(String(squad.call_id))) {
                     console.log(`Error: Squad ${squad.call_id} not found in territory map.  Exiting.`);
@@ -193,6 +228,7 @@ class ShiftSlot {
 
 
     addSquad(squad) {
+        // console.log(`Adding squad: ${squad.toString()} territories: ${squad.territoriesCovered} isArray?: ${Array.isArray(squad.territoriesCovered)}`);
         // Add the squad to a map, or just increment the number of trucks
         // Saves a copy (not a reference)!
         if (this._squads === undefined) {
@@ -324,6 +360,10 @@ function showSquadMap(map) {
 // ===================================================================
 // ===================================================================
 
+// Constants
+const ALL_SQUADS = [34,35,42,43,54];
+const CRLF_REGEX = /\n(?=(?:[^"]*"[^"]*")*[^"]*$)/;
+
 const schedule_input = `"0600 - 1200
 (Tango:54)"	"42
 [35, 42]"	"54
@@ -345,6 +385,27 @@ const schedule_input = `"0600 - 1200
 [35, 42, 54]"	"43
 [34, 43]"	`;
 
+const sched_input_2 = `"600 - 1200
+(Tango:54)"	"42
+[42]"	"54
+[54]"
+"1200 - 1300
+(Tango:54)"	"42
+[42]"	"54
+[54]"
+"1300 - 1600
+(Tango:54)"	"42
+[42]"	"54
+[54]"
+"1600 - 1800
+(Tango:54)"	"42
+[42]"	"54
+[54]"
+"1800 - 600
+(Tango:43)"	"42
+[42]"	"43
+[43]"`;
+
 // ===================================================================
 // CONSTANTS
 // ===================================================================
@@ -354,57 +415,105 @@ const INTERVAL_GRANULARITY = 30;
 
 const padToFour = (num) => num.toString().padStart(4, '0');
 
-function schedSlotFromRow(row) {
-    let start_time = 0;
-    let end_time = 0;
-    let tango = '';
-    let squads = [];
-
-    console.log(row)
-    for (let i = 0; i < row.length; i++) {
-        const col = row[i];
-        if (col.includes(' - ')) {
-            const times = col.match(/(\d{3,4})\s*-\s*(\d{4})/);
-            start_time = parseInt(times[1], 10);
-            end_time = parseInt(times[2], 10);
-            if (col.includes('Tango')) {
-                tango = parseInt(col.match(/\(Tango:(\d+)\)/)[1], 10);
-            }
-        } else {
-            squads.push(parseInt(col.match(/^\d+/)[0],10));
-        }
-    }
-    const slot = new ShiftSlot(start_time, end_time, tango);
-    squads.forEach(sqd => slot.addSquad(new Squad(sqd, [sqd])));
-    return slot;
+function getLineNumber() {
+    const stack = new Error().stack;
+    const caller = stack.split('\n')[4]; // [3] gets the caller's line
+    return caller;
 }
 
+/**
+ * 
+ * @param {Text copied from Spreadsheet} sched 
+ * @returns ShiftSlot[]
+ */
 function parseSchedulePastedInput(sched) {
-    const rows = sched.trim().split('\t');
 
-    slots = []; // Array of ShiftSlot objects
-    sched_grid = [];
-    curr_row = [];
-
-    for (let i = 0; i < rows.length; i++) {
-        const col = rows[i].replaceAll('"', '').trim();
-        if (col.includes(' - ')) {
-            if (curr_row.length > 0) {
-                sched_grid.push(curr_row);
-                slots.push(schedSlotFromRow(curr_row));
-            }
-            curr_row = [];
+    function parseTimeString(str) {
+        str = str.trim().replaceAll('"', '');
+        const pattern = /^(\d{4})\s*-\s*(\d{4})(?:\s*\(Tango:(\d+)\))?$/;
+        const match = str.match(pattern);
+    
+        if (!match) {
+            throw new Error(`Invalid string format. Expected "HHMM - HHMM" or "HHMM - HHMM (Tango:XX)"  String: ${str}`);
         }
-        curr_row.push(col);
+    
+        const startTime = parseInt(match[1]);
+        const endTime = parseInt(match[2]);
+    
+        // Validate times
+        if (startTime > 2359 || endTime > 2359) {
+            throw new Error(`Invalid time format - hours must be 00-23, minutes must be 00-59   String: ${str}`);
+        }
+    
+        return {
+            startTime,
+            endTime,
+            tango: match[3] ? parseInt(match[3]) : undefined
+        };
     }
 
-    if (curr_row.length > 0) {
-        sched_grid.push(curr_row);
-        slots.push(schedSlotFromRow(curr_row));
+    function parseSquadColumn(input) {
+        // Split on newline that's not in brackets
+        const colData = input.trim().replaceAll('"', '');
+        if (colData === '') {
+            return;
+        }
+        const parts = colData.split(/\n(?=(?:[^[]*\[[^[]*\])*[^[]*$)/);
+        if (parts.length !== 2) {
+            throw new Error(`Invalid format: expected squad number followed by array.  Column: ${colData}`);
+        }
+    
+        const squadNumber = parseInt(parts[0]);
+        if (isNaN(squadNumber)) {
+            throw new Error('Invalid squad number');
+        }
+    
+        // Remove brackets and split array part
+        const arrayStr = parts[1].replace(/[\[\]']/g, '').trim();
+        
+        let territories = [];
+        let numberOfTrucks = 1;  // default
+    
+        if (arrayStr.toLowerCase() === 'no crew') {
+            numberOfTrucks = 0;
+        } else if (arrayStr.toLowerCase() === 'all') {
+            territories = [34, 35, 42, 43, 54];  // predefined 'All' territories
+        } else {
+            // Parse comma-separated numbers
+            territories = arrayStr.split(',')
+                .map(num => parseInt(num.trim()))
+                .filter(num => !isNaN(num));
+        }
+    
+        return {
+            squad: squadNumber,
+            territories: territories,
+            numberOfTrucks: numberOfTrucks
+        };
     }
+
+    const rows = sched.trim().split(CRLF_REGEX);
+    slots = []; // Array of ShiftSlot objects
+
+    rows.forEach(row => {
+        const columns = row.split('\t');
+        const ts = parseTimeString(columns[0]);
+        slot = new ShiftSlot(ts.startTime, ts.endTime, ts.tango);
+        slots.push(slot);
+
+        // Add squads
+        for (let i = 1; i < columns.length; i++) {
+            const squad = parseSquadColumn(columns[i]);
+            if (squad) {
+                slot.addSquad(new Squad(squad.squad, squad.territories, squad.numberOfTrucks));
+            }
+        }
+
+    });
 
     return slots;
 }
+
 
 /**
  * 
@@ -413,10 +522,20 @@ function parseSchedulePastedInput(sched) {
  */
 function slotsToSS(slots) {
     let ss = '';
-    for (let i = 0; i < slots.length; i++) {
-        const slot = slots[i];
-        ss += `\"${slot.startTime} - ${slot.endTime}\n`;
-        ss += `(Tango:${slot.tango})\"`;
+    let first = true;
+    slots.forEach(slot => {
+        if (first) {
+            first = false;
+        } else {
+            ss += '\n';
+        }
+        ss += `\"${padToFour(slot.startTime)} - ${padToFour(slot.endTime)}`;
+        if (slot.tango && slot.tango !== '') {
+            ss += `\n(Tango:${slot.tango})\"`;
+        } else {
+            ss += '\"';
+        }
+         ss += "\t";
 
         const iterator = slot.squadIterator;
         let next = iterator.next();
@@ -425,29 +544,25 @@ function slotsToSS(slots) {
             
             let squadString = `${squad.callId}`;
             let coverageString = '';
-            if (squad.numberOfTrucks < 0 ) {
-                coverageString += '[No Crew]';
-            } else if (slot.squads.size == 1) {
-                coverageString += '[All]';
+            if (squad.numberOfTrucks <= 0 ) {
+                coverageString += '[\'No Crew\']';
+            } else if (squad.territoriesCovered.length === 5) {
+                coverageString += '[\'All\']';
             } else if (squad.territoriesCovered.length > 0) {
-                coverageString += `[${squad.territoriesCovered}]`;
+                coverageString += `[${squad.territoriesCovered}]`.replaceAll(',', ', ');
             }
 
-            let squadStringified = `\t\"${squadString}\n${coverageString}\"`;
+            let squadStringified = `\"${squadString}\n${coverageString}\"`;
             if (squad.numberOfTrucks > 1) {
                 ss += squadStringified.repeat(squad.numberOfTrucks);
             } else {
                 ss += squadStringified;
             }
+            ss += '\t';
             next = iterator.next();
         }
 
-
-        // for (let j = 0; j < slot.squads.length; j++) {
-        //     ss += `\"${slot.squads[j]}\n[All]\"\t`;
-        // }
-        ss += '\n';
-    }
+    });
     return ss;
 }
 
@@ -600,29 +715,13 @@ function populateTerritories(slots, territories) {
         // Populate the squads with no crew since they won't be populated in slot.modifySquadTerritories()
         slot.squads.forEach(squad => {
             if (squad.numberOfTrucks === 0) {
-                squad.territories_covered = ['No Crew'];
+                squad.territories_covered = [];
             }
         });
         slot.modifySquadTerritories(territories.get(key));
     });
 }
 
-
-function _populateTerritories(slots, territories) {
-    slots.forEach(slot => {
-        if (slot.numberOfSquads === 1) {
-            slot.modifySquadTerritories(new Map([[String(slot.squads.keys().next().value),'All']]));
-        } else {
-            // Don't get your panties in a bunch over two loops here. It's not that bad.  There can be only 3 squads per slot.
-            let key = makeKeyForSlot(slot);
-            if (!territories.has(key)) {
-                console.log(`Error: Key ${key} not found in territories.  Exiting.`);
-                throw new Error(`Key ${key} not found in territories.  Exiting.`);
-            }
-            slot.modifySquadTerritories(territories.get(key));
-        }
-    });
-}
 
 /**
  * 
@@ -710,8 +809,6 @@ function showMatrix(matrix) {
         [...squads_on_row_map.keys()]
             .sort()
             .map(key => formatted_string += '\t' + squads_on_row_map.get(key).toString());
-
-        console.log(formatted_string)
     }
 }
 
@@ -736,8 +833,21 @@ function createTerritoryMap(tsvFile) {
             throw error;
         });
 }
-const ALL_SQUADS = [34,35,42,43,54];
+
 function buildTeamMap(data) {
+
+    function parseTerritories(column) {
+        if (column == undefined) {
+            return [];
+        }
+        if (column === 'All') {
+            return ALL_SQUADS;
+        } else if (column === 'No Crew') {
+            return [];
+        } else {
+            return column.replaceAll(' ', '').split(',').map(num => parseInt(num));
+        }
+    }
     // Create the outer Map
     const teamMap = new Map();
     
@@ -745,7 +855,7 @@ function buildTeamMap(data) {
     ALL_SQUADS.forEach(squad => {
         const key = squad.toString();
         const innerMap = new Map();
-        innerMap.set(key, 'All');
+        innerMap.set(key, ALL_SQUADS);
         teamMap.set(key, innerMap);
     });
 
@@ -766,9 +876,9 @@ function buildTeamMap(data) {
             const innerMap = new Map();
             
             // Add squad1 and its covering
-            innerMap.set(columns[2].trim(), columns[3].trim().replaceAll(' ', ''));
+            innerMap.set(columns[2].trim(), parseTerritories(columns[3]));
             // Add squad2 and its covering
-            innerMap.set(columns[4].trim(), columns[5].trim().replaceAll(' ', ''));
+            innerMap.set(columns[4].trim(), parseTerritories(columns[5]));
             
             teamMap.set(key, innerMap);
         }
@@ -779,11 +889,11 @@ function buildTeamMap(data) {
             const innerMap = new Map();
             
             // Add squad1 and its covering
-            innerMap.set(columns[8].trim(), columns[9].trim());
+            innerMap.set(columns[8].trim(), parseTerritories(columns[9]));
             // Add squad2 and its covering
-            innerMap.set(columns[10].trim(), columns[11].trim().replaceAll(' ', ''));
+            innerMap.set(columns[10].trim(), parseTerritories(columns[11]));
             // Add squad3 and its covering
-            innerMap.set(columns[12].trim(), columns[13].trim().replaceAll(' ', ''));
+            innerMap.set(columns[12].trim(), parseTerritories(columns[13]));
             
             teamMap.set(key, innerMap);
         }
@@ -807,5 +917,8 @@ module.exports = {
     matrixToSlots,
     populateTerritories,
     populateTango,
-    buildTeamMap
+    buildTeamMap,
+
+    schedule_input,
+    sched_input_2
 }

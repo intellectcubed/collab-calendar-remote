@@ -1,11 +1,31 @@
 .styled-table {
     border-collapse: collapse;
     margin: 25px 0;
-    font-size: 0.9em;
-    font-family: sans-serif;
     min-width: 400px;
+    width: 90%;
+    height: 200px;
+    font-size: 0.8em;
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
 }
+
+caption {
+    font-weight: bold;
+    font-size: 1.2em;
+    margin-bottom: 10px;
+    text-align: left; /* By default, captions are centered */
+}
+
+.tbl_container {
+    display: flex;
+    margin-top: 20px;
+}
+/* .tbl_container {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    width: 600px;
+    margin: 0 auto;
+} */
 
 .styled-table thead tr {
     background-color: #009879;
