@@ -18,3 +18,12 @@ node js/testMatrix.js
 ```
 zip -r ../collab-calendar-remote.zip ../collab-calendar-remote
 ```
+
+---
+## Testing the html locally:
+Run a web server that is pointing to your project root: 
+```
+python3 -m http.server 8000 --directory /Users/gnowakow/Projects/website/collab-calendar-remote
+```
+
+Then navigate to: ```http://localhost:8000```

@@ -1,4 +1,3 @@
-const { get } = require('http');
 const funs = require('./index.js');
 const fs = require('fs').promises;
 const assert = require('assert');
@@ -12,7 +11,7 @@ let resultsDoc = undefined;
 let territoryMap = undefined;
 // --------------------------------
 
-function testGenerateTimeIntervals() {
+exports.unitTest_GenerateTimeIntervals = function() {
     const intervals = funs.generateTimeIntervals(600, 1200);
     const expected = 12;
     if (intervals.length !== expected) {
@@ -68,22 +67,23 @@ function getCallerFunctionName() {
 
 function assertEqualSlots(slots, matrix) {
     const functionName = getCallerFunctionName();
-    // console.log(GT, `assertEqualSlots called from: ${functionName}`);
     const slotsAsString = slots
         .map(item => item.asJsonString())
         .sort()
         .join(',');
 
-    const expectedResults = resultsDoc[functionName]['expectedResult'];
+    const jobKey = getTestKey(functionName);
+    const expectedResults = resultsDoc[jobKey]['expectedResult'];
     if (expectedResults === slotsAsString) {
-        console.log(GTB, `${functionName} passed`);
+        return;
     } else {
-        console.error(`${functionName} failed`);
+        console.error(`${jobKey} failed`);
         if (matrix) {
             funs.showMatrix(matrix);
         }
         funs.showShifts(slots);
         console.log(`Expected: ${JSON.stringify(expectedResults)}\nActual  : ${slotsAsString.replaceAll('"' , '\\"')}`);
+        throw new Error();
     }
 }
 
@@ -111,13 +111,40 @@ function compareArrays(arr1, arr2) {
     return allMatch;
 }
 
-function matrixTest(slots, testName, expectedResults) {
+function getTestKey(functionName) {
+    return functionName.startsWith('exports.') ? functionName.substring(8) : functionName
+}
+
+function assertResultsStringify(results) {
+ 
+    const callerFunction = getCallerFunctionName();
+    const jobKey = getTestKey(callerFunction)
+
+    if (JSON.stringify(results) != JSON.stringify(resultsDoc[jobKey]['expectedResult'])) {
+         console.error('testSlotsToSS failed');
+         console.log('Expected');
+         console.log(JSON.stringify(resultsDoc['testSlotsToSS']['expectedResult']));
+         console.log('Actual');
+         console.log(JSON.stringify(ss));
+         throw new Error();
+    }
+}
+
+function matrixTest(slots) {
     const matrix = funs.slotsToMatrix(slots);
-    compareTestResults(matrix, testName, expectedResults);
+    const jobKey = getTestKey(getCallerFunctionName());
+    compareTestResults(matrix, jobKey, resultsDoc[jobKey]['expectedResult']);
+    // funs.showMatrix(matrix);
+}
+
+function assertTestResults(matrix) {
+    const jobKey = getTestKey(getCallerFunctionName());
+    const expectedResults = resultsDoc[jobKey]['expectedResult'];
+    compareTestResults(matrix, jobKey, expectedResults);
 }
 
 function compareTestResults(matrix, testName, expectedResults) {
-    function compare_results(actual, expected) {
+    function _compare_results(actual, expected) {
         if (actual.length != expected.length) {
             console.error('Lengths do not match');
             return false;
@@ -126,94 +153,161 @@ function compareTestResults(matrix, testName, expectedResults) {
         for (let i = 0; i < actual.length; i++) {
             if (actual[i] != expected[i]) {
                 console.error(`Mismatch at index ${i} - ${actual[i]} != ${expected[i]}`);
-                return false;
+                throw new Error();
             }
         }
     
         return true;
     }
     
-    if (!compare_results(JSON.stringify(matrix), expectedResults.replaceAll('\\"', '"'))) {
+    if (!_compare_results(JSON.stringify(matrix), expectedResults.replaceAll('\\"', '"'))) {
         funs.showMatrix(matrix);
         console.error(`\nError: ${testName}`)
         console.error(`Expected: `);
         console.error(`${expectedResults.replaceAll('"', '\\"')} \nGot: `);
         console.error(JSON.stringify(matrix).replaceAll('"', '\\"'));
-    } else {
-        console.log(GTB, `${testName} passed`);
+        throw new Error();
+    // } else {
+    //     console.log(GTB, `${testName} passed`);
+    }
+    return true;
+}
+
+function compareSlots(expectedSlots, actualSlots) {
+
+    if (expectedSlots.length !== actualSlots.length) {
+        console.error('Lengths do not match');
+        console.error(`\nExpected: ${expectedSlots.length}`);
+        for (let i = 0; i < expectedSlots.length; i++) {
+            console.error(`index: ${i} | ${expectedSlots[i].toString()}`);
+        }
+        console.error(`\nActual: ${actualSlots.length}`);
+        for (let i = 0; i < actualSlots.length; i++) {
+            console.error(`index: ${i} | ${actualSlots[i].toString()}`);
+        }
+        throw new Error();
+    }
+
+    expected_output = '';
+    actual_output = '';
+    allEqual = true;
+    for (let i = 0; i < expectedSlots.length; i++) {
+        expected_output += expectedSlots[i].toString() + '\n';
+        actual_output += actualSlots[i].toString() + '\n';
+        allEqual = allEqual && (expectedSlots[i].toString() === actualSlots[i].toString());
+    }
+
+    if (!allEqual) {
+        console.error('Expected:');
+        console.error(expected_output);
+        console.error('Actual:');
+        console.error(actual_output);
+        throw new Error();
     }
 }
 
-function compareSlots(slots1, slots2) {
-    throw new Error('Not implemented');
+function assertSlotsEqualsExpected(slots) {
+    const functionName = getCallerFunctionName();
+    const jobKey = getTestKey(functionName);
+    const expectedResults = resultsDoc[jobKey]['expectedResult'];
+
+    actualResults = '';
+    slots.map(item => actualResults += item.toString() + '\n');
+
+    if (expectedResults !== actualResults) {
+        console.error(`Expected: \n${expectedResults}\n\nActual: \n${actualResults}`);
+
+        console.error('If correct, replace expected with: ');
+        console.error(JSON.stringify(actualResults));
+        throw new Error();
+    }   
 }
 
 
 // ========================= Test functions =========================
+// Functions should take the form: 
+// exports.unitTest_<functionName> = function() { ... }
+// where <functionName> is the name of the function to test
+// They should take no parameters, and throw an error if the test fails
 // ========================= Test functions =========================
-function testAddSquadStart() {
-    const slot = new funs.ShiftSlot(600, 800, 54).addSquad(squad_54).addSquad(squad_35);
-
-    matrixTest([slot], 'testAddSquadStart', resultsDoc['testAddSquadStart']['expectedResult']);
-}
-
-function testAddSquadEnd() {
-    const slot = new funs.ShiftSlot(530, 600, 54).addSquad(squad_35).addSquad(squad_54);
-
-    matrixTest([slot], 'testAddSquadEnd', resultsDoc['testAddSquadEnd']['expectedResult']);
-}
-
-function testAddSquads1() {
-    // 1800 - 0000 35, 54
-    // 0000 - 0100 35
-    // 0100 - 0200 35, 43
-    // 0200 - 0600 35, 42
+exports.unitTest_AddSquadStart = function() {
     const slots = [
-        new funs.ShiftSlot(1800, 0, 54).addSquad(squad_35).addSquad(squad_54),
-        new funs.ShiftSlot(0, 100, 35).addSquad(squad_35),
-        new funs.ShiftSlot(100, 200, 35).addSquad(squad_35).addSquad(squad_43),
-        new funs.ShiftSlot(200, 600, 54).addSquad(squad_35).addSquad(squad_54),
+        new funs.ShiftSlot(600, 1800, 54).addSquad(squad_54).addSquad(squad_35),
+        new funs.ShiftSlot(1800, 600, 54).addSquad(squad_54).addSquad(squad_35)
     ];
 
-    matrixTest(slots, 'testAddSquads1', resultsDoc['testAddSquads1']['expectedResult']);
+    assertSlotsEqualsExpected(slots);
 }
 
-function testAddSquadsOverlap1() {
+exports.unitTest_AddSquadsToMatrix = function() {
+    const slots = [
+        new funs.ShiftSlot(600, 1800, 54).addSquad(squad_54).addSquad(squad_35),
+        new funs.ShiftSlot(0, 600, 54).addSquad(squad_54).addSquad(squad_35)
+    ];
+
+    newSlots = funs.matrixToSlots(funs.slotsToMatrix(slots), territoryMap);
+
+    assertSlotsEqualsExpected(newSlots);
+}
+
+
+exports.unitTest_AddSquadsNoOverlap = function() {
+
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(1800, 0, 35).addSquad(squad_35));
+    funs.addShift(matrix, new funs.ShiftSlot(0, 100, 43).addSquad(squad_43));
+
+    newSlots = funs.matrixToSlots(matrix, territoryMap);
+
+    assertSlotsEqualsExpected(newSlots);
+}
+
+exports.unitTest_AddSquadsOverlap1 = function() {
     const slots = [
         new funs.ShiftSlot(1800, 600, 54).addSquad(squad_35).addSquad(squad_54),
         new funs.ShiftSlot(0, 100, 35).addSquad(squad_43),
         new funs.ShiftSlot(100, 200, 35).addSquad(squad_42),
     ];
 
-    matrixTest(slots, 'testAddSquadsOverlap1', resultsDoc['testAddSquadsOverlap1']['expectedResult']);
+    newSlots = funs.matrixToSlots(funs.slotsToMatrix(slots), territoryMap);
+
+    assertSlotsEqualsExpected(newSlots);
+}
+
+exports.unitTest_AddSecondTruck = function() {
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(1800, 600, 35).addSquad(squad_35));
+    funs.addShift(matrix, new funs.ShiftSlot(0, 600, 43).addSquad(squad_43));
+
+    newSlots = funs.matrixToSlots(matrix, territoryMap);
+
+    assertSlotsEqualsExpected(newSlots);
+}
+
+exports.unitTest_AddSecondTruck2 = function() {
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(1800, 600, 43).addSquad(squad_43));
+    funs.addShift(matrix, new funs.ShiftSlot(0, 600, 43).addSquad(squad_43));
+
+    newSlots = funs.matrixToSlots(matrix, territoryMap);
+    assertSlotsEqualsExpected(newSlots);
 }
 
 
-function testAddSecondTruck() {
-    const slots = [
-        new funs.ShiftSlot(1800, 600, 54).addSquad(squad_35).addSquad(squad_54),
-        new funs.ShiftSlot(1800, 500, 54).addSquad(squad_54)
-    ];
+exports.unitTest_RemoveSquads = function() {
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(1800, 600, 54).addSquad(squad_35).addSquad(squad_54));
+    funs.addShift(matrix, new funs.ShiftSlot(0, 100, 35).addSquad(squad_43));
+    funs.addShift(matrix, new funs.ShiftSlot(100, 200, 35).addSquad(squad_42));
 
-    matrixTest(slots, 'testAddSecondTruck', resultsDoc['testAddSecondTruck']['expectedResult']);
-}
-
-
-function testRemoveSquads() {
-    const slots = [
-        new funs.ShiftSlot(1800, 600, 54).addSquad(squad_35).addSquad(squad_54),
-        new funs.ShiftSlot(0, 100, 35).addSquad(squad_43),
-        new funs.ShiftSlot(100, 200, 35).addSquad(squad_42),
-    ];
-
-    const matrix = funs.slotsToMatrix(slots);
     funs.removeShift(matrix, new funs.ShiftSlot(0, 100, 35).addSquad(squad_43), obliterate=true)    
     funs.removeShift(matrix, new funs.ShiftSlot(100, 200, 35).addSquad(squad_42))  
 
-    compareTestResults(matrix, arguments.callee.name, resultsDoc['testRemoveSquads']['expectedResult']);
+    newSlots = funs.matrixToSlots(matrix, territoryMap);
+    assertSlotsEqualsExpected(newSlots);
 }
 
-function testSquadIterator() {
+exports.unitTest_SquadIterator = function() {
     const slot = new funs.ShiftSlot(1800, 600, 54).addSquad(squad_42).addSquad(squad_35).addSquad(squad_54);
 
     results = [];
@@ -232,7 +326,7 @@ function testSquadIterator() {
     }
 }
 
-function testSerDe() {
+exports.unitTest_SerDe = function() {
     const slots_1 = [
         new funs.ShiftSlot(1800, 600, 54).addSquad(squad_35).addSquad(squad_54),
         new funs.ShiftSlot(0, 100, 35).addSquad(squad_43),
@@ -256,23 +350,28 @@ function testSerDe() {
     }
 }
 
-function testIsCombinable() {
+exports.unitTest_IsCombinable = function() {
     const slots = [
         new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54),
         new funs.ShiftSlot(830, 1000, 54).addSquad(squad_35).addSquad(squad_54),
 
         new funs.ShiftSlot(1800, 1830, 54).addSquad(squad_35).addSquad(squad_54),
         new funs.ShiftSlot(1830, 1900, 54).addSquad(squad_35).addSquad(squad_54),
+
+        new funs.ShiftSlot(1800, 300, 54).addSquad(squad_35).addSquad(squad_54),
+        new funs.ShiftSlot(300, 600, 54).addSquad(squad_35).addSquad(squad_54),
     ];
+
 
     assert.equal(funs.ShiftSlot.isCombinable(slots[0], slots[1]), true);
     assert.equal(funs.ShiftSlot.isCombinable(slots[2], slots[3]), true);
+    assert.equal(funs.ShiftSlot.isCombinable(slots[4], slots[5]), true);
 
     console.log(GTB, `testIsCombinable passed`);
 
 }
 
-function testSlotsToSS() {
+exports.unitTest_SlotsToSS = function() {
     const slots = [
         new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54),
         new funs.ShiftSlot(830, 1000, 54).addSquad(squad_35).addSquad(squad_54),
@@ -283,18 +382,10 @@ function testSlotsToSS() {
 
     const ss = funs.slotsToSS(slots);
 
-    if (JSON.stringify(ss) != JSON.stringify(resultsDoc['testSlotsToSS']['expectedResult'])) {
-        console.error('testSlotsToSS failed');
-        console.log('Expected');
-        console.log(JSON.stringify(resultsDoc['testSlotsToSS']['expectedResult']));
-        console.log('Actual');
-        console.log(JSON.stringify(ss));
-    } else {
-        console.log(GTB, `testSlotsToSS passed`);
-    }
+    assertResultsStringify(ss);
 }
 
-function testJsonSerde() {
+exports.unitTest_JsonSerde = function() {
     const slots = [
         new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54),
         new funs.ShiftSlot(830, 1000, 54).addSquad(squad_35).addSquad(squad_54),
@@ -322,7 +413,7 @@ function testJsonSerde() {
     console.log(GTB, `testJsonSerde passed`);
 }
 
-function incrementSquad() {
+function unitTest_IncrementSquad() {
     const slots = [
         new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54),
         new funs.ShiftSlot(830, 1000, 54).addSquad(squad_35).addSquad(squad_54),
@@ -336,10 +427,10 @@ function incrementSquad() {
     funs.addShift(matrix, new funs.ShiftSlot(1800, 1830, 54).addSquad(squad_42));
     newSlots = funs.matrixToSlots(matrix, territoryMap);
 
-    matrixTest(newSlots, 'incrementSquad', resultsDoc['incrementSquad']['expectedResult']); 
+    matrixTest(newSlots); 
 }
 
-function testTerritoryPopulationSingle() {
+exports.unitTest_TerritoryPopulationSingle = function() {
     const slots = [
         new funs.ShiftSlot(800, 830, 34).addSquad(squadNoTerr_34)
     ];
@@ -348,7 +439,8 @@ function testTerritoryPopulationSingle() {
     assertEqualSlots(slots);    
 }
 
-function testTerritoryPopulation() {
+
+exports.unitTest_TerritoryPopulation = function() {
     const slots = [
         new funs.ShiftSlot(800, 830, 54).addSquad(squadNoTerr_35).addSquad(squadNoTerr_54),
         new funs.ShiftSlot(830, 1000, 42).addSquad(squadNoTerr_42).addSquad(squadNoTerr_54),
@@ -361,7 +453,7 @@ function testTerritoryPopulation() {
     assertEqualSlots(slots); 
 }
 
-function testTangoPopulation() {
+exports.unitTest_TangoPopulation = function() {
     const slots = [
         new funs.ShiftSlot(800, 830, 54).addSquad(squadNoTerr_35).addSquad(squadNoTerr_54),
         new funs.ShiftSlot(830, 1000, '').addSquad(squadNoTerr_42).addSquad(squadNoTerr_54),
@@ -374,7 +466,7 @@ function testTangoPopulation() {
     assertEqualSlots(slots);
 }
 
-function testTerritoriesOneSquad() {
+exports.unitTest_TerritoriesOneSquad = function() {
     const slots = [
         new funs.ShiftSlot(800, 830, 54).addSquad(squad_35)
     ];
@@ -383,59 +475,43 @@ function testTerritoriesOneSquad() {
     assertEqualSlots(slots);
 }
 
-function testTerritoriesTwoCrewsNoCrew() {
-    const slots = [
-        new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54)
-    ];
-    
-    const matrix = funs.slotsToMatrix(slots);
+exports.unitTest_TerritoriesTwoCrewsNoCrew = function() {
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54));
 
     funs.removeShift(matrix, new funs.ShiftSlot(800, 830, 54).addSquad(squad_35));
     newSlots = funs.matrixToSlots(matrix, territoryMap);
-
-    assertEqualSlots(newSlots, matrix);
+    assertSlotsEqualsExpected(newSlots);
 }
 
-function testTerritoriesThreeCrewsNoCrew() {
-    const slots = [
-        new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54).addSquad(squad_43)
-    ];
-    
-    const matrix = funs.slotsToMatrix(slots);
+exports.unitTest_TerritoriesThreeCrewsNoCrew = function() {
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54).addSquad(squad_43));
 
     funs.removeShift(matrix, new funs.ShiftSlot(800, 830, 54).addSquad(squad_35));
     newSlots = funs.matrixToSlots(matrix, territoryMap);
-
-    assertEqualSlots(newSlots, matrix);
+    assertSlotsEqualsExpected(newSlots);
 }
 
-function testTerritoriesTwoCrewsRemoveCrew() {
-    const slots = [
-        new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54)
-    ];
-    
-    const matrix = funs.slotsToMatrix(slots);
+exports.unitTest_TerritoriesTwoCrewsRemoveCrew = function() {
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54));
 
     funs.removeShift(matrix, new funs.ShiftSlot(800, 830, 54).addSquad(squad_35), obliterate=true);
     newSlots = funs.matrixToSlots(matrix, territoryMap);
-
-    assertEqualSlots(newSlots, matrix);
+    assertSlotsEqualsExpected(newSlots);
 }
 
-function testTerritoriesThreeCrewsRemoveCrew() {
-    const slots = [
-        new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54).addSquad(squad_43)
-    ];
-    
-    const matrix = funs.slotsToMatrix(slots);
+exports.unitTest_TerritoriesThreeCrewsRemoveCrew = function() {
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(800, 830, 54).addSquad(squad_35).addSquad(squad_54).addSquad(squad_43));
 
     funs.removeShift(matrix, new funs.ShiftSlot(800, 830, 54).addSquad(squad_35), obliterate=true);
     newSlots = funs.matrixToSlots(matrix, territoryMap);
-
-    assertEqualSlots(newSlots, matrix);
+    assertSlotsEqualsExpected(newSlots);
 }
 
-function testParseSchedulePastedInput() {
+exports.unitTest_ParseSchedulePastedInput = function() {
 
     const schedule_input = `"0600 - 1200
 (Tango:54)"	"42
@@ -489,7 +565,7 @@ function testParseSchedulePastedInput() {
     }
 }
 
-function testSSSerDe() {
+exports.unitTest_SSSerDe = function() {
     const schedule_input = `"0600 - 1200
 (Tango:54)"	"42
 [35, 42]"	"54
@@ -524,7 +600,7 @@ function testSSSerDe() {
 
 }
 
-function testSquad() {
+exports.unitTest_Squad = function() {
     const squad = new funs.Squad(42, [35, 42], 1);
     assert.equal(squad.toString(), 'Squad: 42 (trk=1) covering [35,42]');
 
@@ -533,42 +609,142 @@ function testSquad() {
 
     const squad3 = new funs.Squad(42, [], number_of_trucks=0);
     assert.equal(squad3.toString(), 'Squad: 42 (trk=0) covering []');
+}
 
+exports.unitTest_AddLast2Hours = function() {
+    const slots = [
+        new funs.ShiftSlot(1800, 300, 35).addSquad(squad_35).addSquad(squad_54),
+        new funs.ShiftSlot(300, 600, 54).addSquad(squad_54)
+    ];
+
+    const matrix = funs.slotsToMatrix(slots);
+
+    funs.addShift(matrix, new funs.ShiftSlot(300, 600, 35).addSquad(squad_35));
+    newSlots = funs.matrixToSlots(matrix, territoryMap);
+
+    const expected = [
+        new funs.ShiftSlot(1800, 600, 35).addSquad(squad_35).addSquad(squad_54)
+    ];
+
+    compareSlots(expected, newSlots);        
+}
+
+exports.unitTest_CrossBoundary = function() {
+    /**
+     * 
+     * Create two shifts, full day and full night.  Same squads and tango
+     * Should preserve the shift boundary
+     * 
+     * 0600 - 1800 35, 54 (35 Tango)
+     * 1800 - 0600 35, 54 (35 Tango)
+     *
+     * Should not combine
+     * 
+     */
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(600, 1800, 54).addSquad(squad_35).addSquad(squad_54));
+    funs.addShift(matrix, new funs.ShiftSlot(1800, 600, 54).addSquad(squad_35).addSquad(squad_54));
+
+    newSlots = funs.matrixToSlots(matrix, territoryMap);
+    assertSlotsEqualsExpected(newSlots);
 }
 
 
-// Run the tests!!!!
-function runTests() {
-    testGenerateTimeIntervals();
-    testSquadIterator();
-    testAddSquadStart();
-    testAddSquadEnd();
-    testAddSquads1();
-    testAddSquadsOverlap1();
-    testRemoveSquads();
-    testAddSecondTruck();
-    incrementSquad();
-    testTerritoryPopulationSingle();
-    testTerritoryPopulation();
-    testTangoPopulation();
-    testIsCombinable();
-    testSerDe();
-    testSlotsToSS();
-    testJsonSerde();
-    testTerritoriesOneSquad();
-    testTerritoriesTwoCrewsNoCrew();
-    testTerritoriesThreeCrewsNoCrew();
-    testTerritoriesTwoCrewsRemoveCrew();
-    testTerritoriesThreeCrewsRemoveCrew();
-    testParseSchedulePastedInput();
-    testSSSerDe();
-    testSquad();
+exports.unitTest_RemoveShiftScenario1 = function() {
+    /**
+     * Test scenario:
+     * On a Saturday, we have two shifts that are the same crews: 
+     * 0600 - 1800 35, 54
+     * 1800 - 0600 35, 54
+     * 
+     * We get a request to remove 35 from the hours of 0300 - 0600
+     * The system has to be smart enough to realize that this applies to the 2nd shift, morning (which is actually the next day)
+     */
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(600, 1800, 54).addSquad(squad_35).addSquad(squad_54));
+    funs.addShift(matrix, new funs.ShiftSlot(1800, 600, 54).addSquad(squad_35).addSquad(squad_54));
+
+    funs.removeShift(matrix, new funs.ShiftSlot(300, 600).addSquad(squad_35));
+    newSlots = funs.matrixToSlots(matrix, territoryMap);
+    assertSlotsEqualsExpected(newSlots);
 }
+
+
+exports.unitTest_RemoveShiftScenario2 = function() {
+
+    /**
+     * Removing squad that is Tango
+     * Test scenario:
+     * On a Saturday, we have two shifts that are the same crews: 
+     * 0600 - 1800 35, 54
+     * 1800 - 0600 35, 54
+     * 
+     * We get a request to remove 35 from the hours of 0300 - 0600
+     * The system has to be smart enough to realize that this applies to the 2nd shift, morning (which is actually the next day)
+     */
+    matrix = funs.slotsToMatrix([], territoryMap);   
+    funs.addShift(matrix, new funs.ShiftSlot(600, 1800, 35).addSquad(squad_35).addSquad(squad_54));
+    funs.addShift(matrix, new funs.ShiftSlot(1800, 600, 35).addSquad(squad_35).addSquad(squad_54));
+
+    funs.removeShift(matrix, new funs.ShiftSlot(300, 600).addSquad(squad_35));
+    newSlots = funs.matrixToSlots(matrix, territoryMap);
+    assertSlotsEqualsExpected(newSlots);
+}
+
+// -----------------------
+
+// Get all function names from the current file that start with unitTest_
+function getFunctionNames() {
+    const fs = require('fs');
+    const fileContent = fs.readFileSync(__filename, 'utf8');
+    const functionPattern = /exports\.(unitTest_[a-zA-Z0-9_$]*)\s*=/g;
+    const matches = fileContent.matchAll(functionPattern);
+    const functionNames = [];
+    
+    for (const match of matches) {
+        if (match[1]) functionNames.push(match[1]);
+    }
+    
+    return functionNames;
+}
+
+// Execute all unit tests
+function runUnitTests() {
+    const testFunctions = getFunctionNames();
+    console.log("Found test functions:", testFunctions);
+    
+    testFunctions.forEach(functionName => {
+        try {
+            console.log(GTB, `\n Running ${functionName}...`);
+            // Call the function from our exported object
+            exports[functionName]();
+            console.log(`✅ ${functionName} completed successfully`);
+        } catch (error) {
+            console.error(`❌ ${functionName} failed:`, error);
+        }
+    });
+}
+
+// Example test functions - make sure to export them
+exports.unitTest_example1 = function() {
+    console.log("Testing example 1");
+    if (2 + 2 !== 4) throw new Error("Math is broken!");
+};
+
+exports.unitTest_example2 = function() {
+    console.log("Testing example 2");
+    if (10 - 5 !== 5) throw new Error("Subtraction is broken!");
+};
+
+// Run all tests
+// runUnitTests();
+// -----------------------
 
 
 // ==== Main =====
 readTestState('/Users/gnowakow/Projects/website/collab-calendar-remote/js/expectedResults.json', '/Users/gnowakow/Projects/website/collab-calendar-remote/data/territories.tsv')
     .then(() => {
-        runTests();
+        // runTests();
+        runUnitTests();
         console.log(GT, 'All tests passed');
     });

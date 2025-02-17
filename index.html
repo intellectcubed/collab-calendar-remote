@@ -339,7 +339,7 @@
         function modifySlot(rowIdx) {
             openPopup();
             const selectedSlot = global_modifiedSlots[rowIdx];
-            document.getElementById("selectedShift").innerHTML = selectedSlot.toString();
+            document.getElementById("selectedShift").innerHTML = slotsToSS([selectedSlot]);
 
             document.getElementById('editShiftTango').value = selectedSlot.tango;
             populateEditShiftPanel(selectedSlot);

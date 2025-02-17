@@ -84,17 +84,21 @@ class Squad {
     asJsonString() {
         return {
             call_id: this.call_id,
-            territories_covered: this.territories_covered,
+            territories_covered: this.territoriesCovered,
             number_of_trucks: this.number_of_trucks,
-            is_first_responder: this.is_first_responder
+            is_first_responder: this.is_first_responder,
         };
+    }
+
+    toJSON() {
+        return this.asJsonString();
     }
 }
 
 class ShiftSlot {
     constructor(startTime, endTime, tango) {
-        this._startTime = startTime;
-        this._endTime = endTime;
+        this._startTime = parseInt(startTime);
+        this._endTime = parseInt(endTime);
         this._tango = tango;
     }
 
@@ -141,11 +145,11 @@ class ShiftSlot {
         this._tango = tango;
     }
 
-    get numberOfTrucks() {
-        let total = 0;
-        this._squads?.forEach(squad => total += squad.number_of_trucks);
-        return total;
-    }
+    // get numberOfTrucks() {
+    //     let total = 0;
+    //     this._squads?.forEach(squad => total += squad.number_of_trucks);
+    //     return total;
+    // }
 
     get numberOfSquads() {
         return this._squads?.size || 0;
@@ -243,12 +247,29 @@ class ShiftSlot {
     }
 
     removeSquad(squad, obliterate=false) {
+        function findFirstSquadWithTrucks(squadMap) {
+            for (const squad of squadMap.values()) {
+                if (squad.numberOfTrucks > 0) {
+                    return squad;
+                }
+            }
+            return null; // or undefined, depending on your needs
+        }
+
         if (this._squads === undefined || !this._squads.has(squad.call_id) || this._squads.get(squad.call_id).number_of_trucks < 1) {
             throw new Error(`Attempted to removeSquad: ${squad.call_id} but it does not exist`);
         }
 
         const _targetSquad = this._squads.get(squad.call_id);
         _targetSquad.number_of_trucks--;
+        if (_targetSquad.number_of_trucks === 0 && this.tango === _targetSquad.call_id) {
+            const nextTangoSquad = findFirstSquadWithTrucks(this._squads);
+            if (nextTangoSquad !== null) {
+                this.tango = nextTangoSquad.call_id;
+            } else {
+                this.tango = undefined;
+            }
+        }
 
         if (obliterate && _targetSquad.number_of_trucks == 0) {
             this._squads.delete(squad.call_id);
@@ -259,18 +280,17 @@ class ShiftSlot {
     static isCombinable(slot1, slot2) {
         function areMapsEqual(map1, map2) {
             if (map1.size !== map2.size) return false;
-            return showSquadMap(map1) === showSquadMap(map2);
-            // return [...map1.entries()].every(
-            //     ([key, value]) => map2.has(key) && map2.get(key) === value
-            // );
+            if ( showSquadMap(map1) !== showSquadMap(map2) ) {
+                return false;
+            } else {
+                return true;
+            }
         }
 
         if (parseInt(slot1.endTime) == parseInt(slot2.startTime) || parseInt(slot2.endTime) == parseInt(slot1.startTime)) {
-            // console.log(`Checking Maps: Slot1: ${showSquadMap(slot1.squads)} Slot2: ${showSquadMap(slot2.squads)} Result: ${areMapsEqual(slot1.squads,slot2.squads)}`);
             return areMapsEqual(slot1.squads, slot2.squads) &&
                 slot1.tango === slot2.tango && slot1.number_of_trucks === slot2.number_of_trucks;
         } else {
-            // console.log(`Slots are not combinable (bad time): Slot1: ${slot1.startTime} - ${slot1.endTime} Slot2: ${slot2.startTime} - ${slot2.endTime} Result: ${(slot1.endTime == slot2.startTime || slot2.endTime == slot1.startTime)}`);
             return false;
         }
     }
@@ -348,8 +368,8 @@ class ShiftSlotCollection {
 
 function showSquadMap(map) {
     let str = '';
-    map.forEach((value, key) => {
-        str += `${key} => ${value} `;
+    [...map.keys()].sort().forEach(key => {
+        str += `${key} => ${map.get(key)} `;
     });
     return str;
 }
@@ -641,37 +661,56 @@ function slotsToMatrix(slots) {
     return matrix;
 }
 
+const SHIFT_START = 1800
+
+
+function crossesShifts(slot1, slot2, isCombinable) {
+    return isCombinable && slot1.endTime <= SHIFT_START &&  slot2.startTime >= SHIFT_START;
+        
+}
+
+
+function handleCombinableSlots(slots, slot, lastSlot, isCombinable) {
+    if (crossesShifts(lastSlot, slot, isCombinable)) {
+        lastSlot.endTime = SHIFT_START;
+        const newSlot = ShiftSlot.fromInstance(slot);
+        newSlot.startTime = SHIFT_START;
+        slots.push(newSlot);
+    } else {
+        lastSlot.endTime = slot.endTime;
+    }
+}
+
+
 function matrixToSlots(matrix, territories) {
+
     let slots = [];
 
     for (let i = 0; i < matrix.length; i++) {
         const slot = matrix[i];
+
+        // If it is an empty slot...skip it
         if (slot.squads.size === 0) {
             continue;
         }
 
-        if ( slots.length === 0 || !ShiftSlot.isCombinable(slots[slots.length - 1], slot)) {
+        if (slots.length === 0) {
             slots.push(ShiftSlot.fromInstance(slot));
-        } else if (ShiftSlot.isCombinable(slots[slots.length - 1], slot)) {
-            slots[slots.length - 1].endTime = slot.endTime;
+        } else {
+            const lastSlot = slots[slots.length - 1];
+            const isCombinable = ShiftSlot.isCombinable(lastSlot, slot);
+
+            if (isCombinable) {
+                handleCombinableSlots(slots, slot, lastSlot, isCombinable);
+            } else {
+                slots.push(ShiftSlot.fromInstance(slot));
+            }
         }
-        // console.log(`Slot: ${slot.startTime} - ${slot.endTime}`);
     }
+
     populateTerritories(slots, territories);
     populateTango(slots);
     return slots;
-}
-
-function _makeKeyForSlot(slot) {
-    let key = '';
-    slot.squads.forEach(squad => {
-        if (key !== '') {
-            key += ',';
-        }
-        key += squad.call_id;
-    });
-
-    return key.split(',').sort().join(',');
 }
 
 /**
@@ -708,6 +747,10 @@ function populateTerritories(slots, territories) {
     slots.forEach(slot => {
         // Don't get your panties in a bunch over two loops here. It's not that bad.  There can be only 3 squads per slot.
         let key = makeKeyForSlot(slot);
+        if (key.trim()  == '') {
+            console.log(`Error: Key is empty for slot: ${slot}.  Exiting.`);
+            throw new Error(`Key is empty.  Exiting.`);
+        }
         if (!territories.has(key)) {
             console.log(`Error: Key ${key} not found in territories.  Exiting.`);
             throw new Error(`Key ${key} not found in territories.  Exiting.`);
@@ -795,21 +838,9 @@ function showShifts(slots) {
 }
 
 function showMatrix(matrix) {
-    for (let i = 0; i < matrix.length; i++) {
-        const matrixRow = matrix[i];
-
-        formatted_string = `${matrixRow.startTime}`;
-        if (matrixRow.tango !== undefined) {
-            formatted_string += `\tTango=${matrixRow.tango}`;
-        } else {
-            formatted_string += '\t';
-        }
-
-        squads_on_row_map = matrixRow.squads;
-        [...squads_on_row_map.keys()]
-            .sort()
-            .map(key => formatted_string += '\t' + squads_on_row_map.get(key).toString());
-    }
+    matrix.forEach(row => {
+        console.log(row.toString());
+    });
 }
 
 /**
