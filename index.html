@@ -307,16 +307,6 @@
         }
 
         function populate_shift_table(tableName, shiftSlots) {
-
-            // if (Cookies.get(STAGING_CALENDAR_DATA) === undefined) {
-            //     console.error('No staging data found');
-            //     return;
-            // }
-
-            // const slotCollection = ShiftSlotCollection.fromJsonString(JSON.parse(Cookies.get(STAGING_CALENDAR_DATA)));
-
-            // console.log(`Populating table ${tableName} with ${slotCollection.shiftSlots.length} slots`);
-
             global_modifiedSlots = shiftSlots;
 
             const table = document.getElementById(tableName);
@@ -335,7 +325,11 @@
                 const iterator = slot.squadIterator;
                 let next = iterator.next();
                 while (!next.done) {
-                    tableHtml += `<td>${next.value.call_id}(${next.value.number_of_trucks})<br/>${formatTerritories(next.value.territoriesCovered)}</td>`;
+                    // tableHtml += `<td>${next.value.call_id}(${next.value.number_of_trucks})<br/>${formatTerritories(next.value.territoriesCovered)}</td>`;
+                    squadColStr = `${next.value.call_id}<br/>${formatTerritories(next.value.territoriesCovered)}`;
+                    tableHtml += Array(next.value.numberOfTrucks)
+                        .fill(`<td>${squadColStr}</td>`)
+                        .join('');
                     next = iterator.next();
 
                 }
@@ -445,7 +439,6 @@
 
         function copyToClipboard() {
             try {
-                console.log('Im gonna call it!!!'); 
                 const ssText = slotsToSS(global_modifiedSlots);
                 console.log('Copying to clipboard:', ssText);
 
@@ -494,15 +487,6 @@
             // console.log(`Here is the value: ${territories.get(key).get(squad.callId)}`);
             console.log(`Here is the value: ${territories.get('34,43').get('34')}`);
         }
-
-
-        // function copyToClipboard() {
-        //     const outputTextarea = document.getElementById('transformed_csv_textarea');
-        //     console.log('Copying to clipboard:', outputTextarea.value);
-        //     outputTextarea.select();
-        //     document.execCommand('copy');
-        //     alert('Copied to clipboard!');        
-        // }
 
         //!-- Edit shift panel -->
 
