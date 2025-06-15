@@ -232,6 +232,15 @@
         });
         // ============================= Initialization after Doc is loaded ==================================
 
+        const formatTerritories = (territories) => {
+            if (territories.length === 0) {
+                return '[No Crew]';
+            } else if (territories.length === 5) {
+                return '[All]';
+            } else {
+                return `[${territories.join(', ')}]`;
+            }
+        }
 
         function initializeControls() {
             // Get all select elements
@@ -326,7 +335,7 @@
                 const iterator = slot.squadIterator;
                 let next = iterator.next();
                 while (!next.done) {
-                    tableHtml += `<td>${next.value.call_id}(${next.value.number_of_trucks})<br/>[${next.value.territoriesCovered}]</td>`;
+                    tableHtml += `<td>${next.value.call_id}(${next.value.number_of_trucks})<br/>${formatTerritories(next.value.territoriesCovered)}</td>`;
                     next = iterator.next();
 
                 }
@@ -396,15 +405,6 @@
             const newSlot = new ShiftSlot(parseInt(shiftTimes.startTime), parseInt(shiftTimes.endTime), -1).addSquad(new Squad(squad_call_id, [34], 1)); // TODO: What about Tango?
             console.log(`Adding slot: ${newSlot.toString()}`);
 
-            // console.log(`Cookies at the start: ${Cookies.get(STAGING_CALENDAR_DATA)}`);
-            // /** @type {ShiftSlotCollection} */
-            // const collection = (Cookies.get(STAGING_CALENDAR_DATA) != undefined ? ShiftSlotCollection.fromJsonString(Cookies.get(STAGING_CALENDAR_DATA)) : new ShiftSlotCollection());
-            // collection.addShiftSlot(newSlot);
-
-            // if (collection.size > 0) {
-            //     // Add to matrix, then back to collection
-            // }
-
             addShift(modifiedMatrix, newSlot);
             
             // Cookies.set(STAGING_CALENDAR_DATA, collection.asJsonString(), 1);
@@ -445,7 +445,9 @@
 
         function copyToClipboard() {
             try {
+                console.log('Im gonna call it!!!'); 
                 const ssText = slotsToSS(global_modifiedSlots);
+                console.log('Copying to clipboard:', ssText);
 
                 navigator.clipboard.writeText(ssText)
                 .then(() => {

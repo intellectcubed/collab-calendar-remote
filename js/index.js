@@ -435,6 +435,7 @@ const INTERVAL_GRANULARITY = 30;
 
 const padToFour = (num) => num.toString().padStart(4, '0');
 
+
 function getLineNumber() {
     const stack = new Error().stack;
     const caller = stack.split('\n')[4]; // [3] gets the caller's line
@@ -574,7 +575,7 @@ function slotsToSS(slots) {
 
             let squadStringified = `\"${squadString}\n${coverageString}\"`;
             if (squad.numberOfTrucks > 1) {
-                ss += squadStringified.repeat(squad.numberOfTrucks);
+                ss += Array(squad.numberOfTrucks).fill(squadStringified).join('\t');
             } else {
                 ss += squadStringified;
             }

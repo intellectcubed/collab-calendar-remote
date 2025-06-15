@@ -23,7 +23,13 @@ zip -r ../collab-calendar-remote.zip ../collab-calendar-remote
 ## Testing the html locally:
 Run a web server that is pointing to your project root: 
 ```
+
+python3 -m http.server 8000 --directory /Users/gman/Projects/Websites/collab-calendar-remote
+
 python3 -m http.server 8000 --directory /Users/gnowakow/Projects/website/collab-calendar-remote
 ```
+
+## Important Note:
+If you are using the local http server, and you make changes to the javascript files, you will need to clear your browser cache to see the changes.  Try a hard refresh (cmd+shift+r on Mac) or clear the cache from the browser settings.
 
 Then navigate to: ```http://localhost:8000```
